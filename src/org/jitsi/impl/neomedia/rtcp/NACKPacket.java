@@ -205,5 +205,67 @@ public class NACKPacket
     {
         return RTCPPacketParserEx.toRawPacket(this);
     }
+
+    /**
+     * Gets the lost packets (expressed as sequence numbers) that are found in
+     * the NACK packet that is passed in as a parameter.
+     *
+     * @param buf the byte buffer that holds the NACK packet.
+     * @param off the offset in the byte buffer where the NACK packet begins.
+     * @param len the length of the NACK packet in the byte buffer.
+     * @return the lost packets (expressed as sequence numbers) that are found
+     * in the NACK packet that is passed in as a parameter, or null if it's an
+     * invalid packet.
+     */
+    public static Set<Integer> getLostPackets(byte[] buf, int off, int len)
+    {
+        int pktLen = RTCPHeaderUtils.getLength(buf, off, len);
+        if (pktLen < RTCPHeader.SIZE + 8)
+        {
+            return null;
+        }
+
+        int fciOff = off + RTCPHeader.SIZE + 8;
+        int fciLen = pktLen - RTCPHeader.SIZE + 8;
+
+        Set<Integer> lostPackets = new TreeSet<>();
+        for (int i = 0; i < (fciLen / 4); i++)
+        {
+            int pid = (0xFF & buf[fciOff + i * 4 + 0]) << 8
+                | (0xFF & buf[fciOff + i * 4 + 1]);
+            lostPackets.add(pid);
+
+            // First byte of the BLP
+            for (int j = 0; j < 8; j++)
+                if (0 != (buf[fciOff + i * 4 + 2] & (1 << j)))
+                    lostPackets.add((pid + 1 + 8 + j) % (1 << 16));
+
+            // Second byte of the BLP
+            for (int j = 0; j < 8; j++)
+                if (0 != (buf[fciOff + i * 4 + 3] & (1 << j)))
+                    lostPackets.add((pid + 1 + j) % (1 << 16));
+        }
+
+        return lostPackets;
+    }
+
+    /**
+     * Gets the lost packets (expressed as sequence numbers) that are found in
+     * the NACK packet that is passed in as a parameter.
+     *
+     * @param pkt the {@code RawPacket} that holds the NACK packet.
+     * @return the lost packets (expressed as sequence numbers) that are found
+     * in the NACK packet that is passed in as a parameter, or null if it's an
+     * invalid packet.
+     */
+    public static Set<Integer> getLostPackets(RawPacket pkt)
+    {
+        if (pkt == null)
+        {
+            return null;
+        }
+
+        return getLostPackets(pkt.getBuffer(), pkt.getOffset(), pkt.getLength());
+    }
 }
 

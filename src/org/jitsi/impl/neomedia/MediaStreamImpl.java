@@ -33,7 +33,6 @@ import org.jitsi.impl.neomedia.codec.*;
 import org.jitsi.impl.neomedia.device.*;
 import org.jitsi.impl.neomedia.format.*;
 import org.jitsi.impl.neomedia.protocol.*;
-import org.jitsi.impl.neomedia.rtcp.termination.strategies.*;
 import org.jitsi.impl.neomedia.rtp.*;
 import org.jitsi.impl.neomedia.rtp.translator.*;
 import org.jitsi.impl.neomedia.stats.*;
@@ -321,15 +320,6 @@ public class MediaStreamImpl
      */
     private final TransformEngineWrapper<TransformEngine>
         externalTransformerWrapper
-            = new TransformEngineWrapper<>();
-
-    /**
-     * The <tt>TransformEngine</tt> instance registered in the
-     * <tt>RTPConnector</tt>'s transform chain, which allows the
-     * <tt>RTCPTerminationStrategy</tt> to be swapped.
-     */
-    private final TransformEngineWrapper<RTCPTerminationStrategy>
-        rtcpTransformEngineWrapper
             = new TransformEngineWrapper<>();
 
     /**
@@ -779,11 +769,11 @@ public class MediaStreamImpl
         if (deviceSession != null)
             deviceSession.close();
 
-        RTCPTerminationStrategy strategy = getRTCPTerminationStrategy();
-        if (strategy instanceof RecurringRunnable)
+        TransformEngine rtcpTermination = getOrCreateRTCPTermination();
+        if (rtcpTermination instanceof RecurringRunnable)
         {
-            recurringRunnableExecutor
-                .deRegisterRecurringRunnable((RecurringRunnable) strategy);
+            recurringRunnableExecutor.deRegisterRecurringRunnable(
+                (RecurringRunnable) rtcpTermination);
         }
     }
 
@@ -1023,7 +1013,7 @@ public class MediaStreamImpl
      */
     private TransformEngineChain createTransformEngineChain()
     {
-        List<TransformEngine> engineChain = new ArrayList<>(9);
+        List<TransformEngine> engineChain = new ArrayList<>();
 
         // CSRCs and CSRC audio levels
         if (csrcEngine == null)
@@ -1036,6 +1026,11 @@ public class MediaStreamImpl
             engineChain.add(dtmfEngine);
 
         engineChain.add(externalTransformerWrapper);
+
+        // RTX
+        RtxTransformer rtxTransformer = getRtxTransformer();
+        if (rtxTransformer != null)
+            engineChain.add(rtxTransformer);
 
         // here comes the override payload type transformer
         // as it changes headers of packets, need to go before encryption
@@ -1062,7 +1057,9 @@ public class MediaStreamImpl
         // RTCPTerminationStrategy for inspection and modification. The RTCP
         // termination needs to be as close to the SRTP transform engine as
         // possible.
-        engineChain.add(rtcpTransformEngineWrapper);
+        TransformEngine rtcpTermination = getOrCreateRTCPTermination();
+        if (rtcpTermination != null)
+            engineChain.add(rtcpTermination);
 
         // RTCP Statistics
         if (statisticsEngine == null)
@@ -1524,6 +1521,18 @@ public class MediaStreamImpl
         MediaDeviceSession devSess = getDeviceSession();
 
         return (devSess == null) ? null : devSess.getFormat();
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public MediaFormat getRemoteFormat(byte pt)
+    {
+        synchronized (dynamicRTPPayloadTypes)
+        {
+            return dynamicRTPPayloadTypes.get(pt);
+        }
     }
 
     /**
@@ -3564,53 +3573,6 @@ public class MediaStreamImpl
      * {@inheritDoc}
      */
     @Override
-    public RTCPTerminationStrategy getRTCPTerminationStrategy()
-    {
-        return rtcpTransformEngineWrapper.getWrapped();
-    }
-
-    /**
-     * {@inheritDoc}
-     */
-    @Override
-    public void setRTCPTerminationStrategy(
-            RTCPTerminationStrategy rtcpTerminationStrategy)
-    {
-        RTCPTerminationStrategy oldValue
-            = rtcpTransformEngineWrapper.getWrapped();
-        RTCPTerminationStrategy newValue = rtcpTerminationStrategy;
-
-        if (oldValue != newValue)
-        {
-            if (oldValue instanceof RecurringRunnable)
-            {
-                recurringRunnableExecutor
-                    .deRegisterRecurringRunnable((RecurringRunnable) oldValue);
-            }
-
-            // XXX The following (source) code was moved here from another place
-            // and there it was called before remembering the new
-            // rtcpTerminationStrategy so we've preserved the order here.
-            if (newValue instanceof MediaStreamRTCPTerminationStrategy)
-            {
-                ((MediaStreamRTCPTerminationStrategy) newValue)
-                    .initialize(this);
-            }
-
-            if (newValue instanceof RecurringRunnable)
-            {
-                recurringRunnableExecutor
-                    .registerRecurringRunnable((RecurringRunnable) newValue);
-            }
-
-            rtcpTransformEngineWrapper.setWrapped(newValue);
-        }
-    }
-
-    /**
-     * {@inheritDoc}
-     */
-    @Override
     @SuppressWarnings("unchecked")
     public void injectPacket(RawPacket pkt, boolean data, TransformEngine after)
         throws TransmissionFailedException
@@ -3648,15 +3610,6 @@ public class MediaStreamImpl
                 {
                     after = wrapper;
                 }
-                else
-                {
-                    // rtcpTransformEngineWrapper
-                    wrapper = rtcpTransformEngineWrapper;
-                    if (wrapper != null && wrapper.contains(after))
-                    {
-                        after = wrapper;
-                    }
-                }
             }
 
             outputStream.write(
@@ -3676,7 +3629,8 @@ public class MediaStreamImpl
     */
     public boolean isKeyFrame(byte[] buf, int off, int len)
     {
-        if (buf == null || buf.length < off + len)
+        if (buf == null || buf.length < off + len
+            || len < net.sf.fmj.media.rtp.RTPHeader.SIZE)
         {
             return false;
         }

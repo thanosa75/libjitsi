@@ -146,4 +146,43 @@ public class RTCPFBPacket
     {
         return "\tRTCP FB packet from sync source " + senderSSRC;
     }
+
+    /**
+     * Gets the source SSRC of an RTCP FB packet.
+     *
+     * @param buf the byte buffer that contains the RTCP FB packet.
+     * @param off the offset in the byte buffer that the RTCP FB packet starts.
+     * @param len the length of the RTCP FB packet in the byte buffer.
+     *
+     * @return the source SSRC of an RTCP FB packet, or -1 if this is an invalid
+     * RTCP FB packet.
+     */
+    public static long getSourceSSRC(byte[] buf, int off, int len)
+    {
+        int pktLen = RTCPHeaderUtils.getLength(buf, off, len);
+        if (pktLen < RTCPHeader.SIZE + 4)
+        {
+            return -1;
+        }
+
+        return RawPacket.readInt(
+            buf, off + RTCPHeader.SIZE, len - RTCPHeader.SIZE);
+    }
+
+    /**
+     *  Gets the source SSRC of an RTCP FB packet.
+     *
+     * @param pkt the {@code RawPacket} that contains the RTCP FB packet.
+     * @return the source SSRC of an RTCP FB packet, or -1 if this is an invalid
+     * RTCP FB packet.
+     */
+    public static long getSourceSSRC(RawPacket pkt)
+    {
+        if (pkt == null)
+        {
+            return -1;
+        }
+
+        return getSourceSSRC(pkt.getBuffer(), pkt.getOffset(), pkt.getLength());
+    }
 }

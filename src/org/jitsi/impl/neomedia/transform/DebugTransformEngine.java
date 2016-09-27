@@ -292,11 +292,9 @@ public class DebugTransformEngine implements TransformEngine
 
                 // Check RTCP packet validity. This makes sure that
                 // pktLen > 0 so this loop will eventually terminate.
-                if (RTCPHeaderUtils.isValid(buf, offset, length))
+                int pktLen = RTCPHeaderUtils.getLength(buf, offset, length);
+                if (pktLen >= RTCPHeader.SIZE + RTCPSenderInfo.SIZE)
                 {
-
-                    int pktLen = RTCPHeaderUtils.getLength(buf, offset, length);
-
                     int pt = RTCPHeaderUtils.getPacketType(buf, offset, pktLen);
                     if (pt == RTCPPacket.SR)
                     {

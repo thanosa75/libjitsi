@@ -28,6 +28,7 @@ import javax.media.protocol.*;
 
 import org.jitsi.impl.neomedia.control.*;
 import org.jitsi.impl.neomedia.device.*;
+import org.jitsi.impl.neomedia.rtcp.termination.strategies.*;
 import org.jitsi.impl.neomedia.rtp.*;
 import org.jitsi.impl.neomedia.rtp.remotebitrateestimator.*;
 import org.jitsi.impl.neomedia.rtp.sendsidebandwidthestimation.*;
@@ -456,12 +457,22 @@ public class VideoMediaStreamImpl
     private BandwidthEstimatorImpl bandwidthEstimator;
 
     /**
+     * The RTCP termination strategy for this {@code MediaStream}.
+     */
+    private TransformEngine rtcpTermination;
+
+    /**
      * The transformer which handles SSRC rewriting. It is always created
      * (which is extremely lightweight) but it needs to be initialized so that
      * it can work.
      */
     private final SsrcRewritingEngine ssrcRewritingEngine
         = new SsrcRewritingEngine(this);
+
+    /**
+     * The transformer that handles RTX.
+     */
+    private final RtxTransformer rtxTransformer = new RtxTransformer(this);
 
     /**
      * Initializes a new <tt>VideoMediaStreamImpl</tt> instance which will use
@@ -1322,12 +1333,19 @@ public class VideoMediaStreamImpl
     @Override
     protected RetransmissionRequesterImpl createRetransmissionRequester()
     {
+        // FIXME retransmission requests should be handled by the RTCP
+        // termination strategy.
         ConfigurationService cfg = LibJitsi.getConfigurationService();
-        if (cfg != null && cfg.getBoolean(REQUEST_RETRANSMISSIONS_PNAME, false))
+        if (cfg != null && !cfg.getBoolean(
+            BasicRTCPTermination.DISABLE_NACK_TERMINATION_PNAME,
+            false))
         {
             return new RetransmissionRequesterImpl(this);
         }
-        return null;
+        else
+        {
+            return null;
+        }
     }
 
     /**
@@ -1337,6 +1355,15 @@ public class VideoMediaStreamImpl
     protected SsrcRewritingEngine getSsrcRewritingEngine()
     {
         return ssrcRewritingEngine;
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public RtxTransformer getRtxTransformer()
+    {
+        return rtxTransformer;
     }
 
     /**
@@ -1353,5 +1380,43 @@ public class VideoMediaStreamImpl
             logger.info("Creating a BandwidthEstimator for stream " + this);
         }
         return bandwidthEstimator;
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public TransformEngine getOrCreateRTCPTermination()
+    {
+        if (rtcpTermination != null)
+        {
+            return rtcpTermination;
+        }
+
+        // Initialize the RTCP termination strategy from the configuration.
+        ConfigurationService cfg = LibJitsi.getConfigurationService();
+        if (cfg == null)
+        {
+            return null;
+        }
+
+        String rtcpTerminationStrategyName = cfg.getString(
+                BasicRTCPTermination.RTCP_TERMINATION_STRATEGY_PNAME,
+                "");
+
+        if (!StringUtils.isNullOrEmpty(rtcpTerminationStrategyName))
+        {
+            rtcpTermination = new BasicRTCPTermination(this);
+            if (rtcpTermination instanceof RecurringRunnable)
+            {
+                recurringRunnableExecutor.registerRecurringRunnable(
+                    (RecurringRunnable) rtcpTermination);
+            }
+            return rtcpTermination;
+        }
+        else
+        {
+            return null;
+        }
     }
 }

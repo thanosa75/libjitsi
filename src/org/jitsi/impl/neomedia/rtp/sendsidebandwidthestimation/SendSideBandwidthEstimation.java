@@ -30,7 +30,7 @@ import java.util.*;
  * @author Boris Grozev
  */
 class SendSideBandwidthEstimation
-    implements REMBListener, BandwidthEstimator
+    implements BandwidthEstimator
 {
     /**
      * send_side_bandwidth_estimation.cc
@@ -306,7 +306,7 @@ class SendSideBandwidthEstimation
     /**
      * void SendSideBandwidthEstimation::UpdateReceiverEstimate
      */
-    private synchronized void updateReceiverEstimate(long bandwidth)
+    public synchronized void updateReceiverEstimate(long bandwidth)
     {
         bwe_incoming_ = bandwidth;
         setBitrate(capBitrateToThresholds(bitrate_));
@@ -359,15 +359,6 @@ class SendSideBandwidthEstimation
     public synchronized void removeListener(Listener listener)
     {
         listeners.remove(listener);
-    }
-
-    /**
-     * {@inheritDoc}
-     */
-    @Override
-    public void rembReceived(long bitrateBps)
-    {
-        updateReceiverEstimate(bitrateBps);
     }
 
     /**

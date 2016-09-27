@@ -158,12 +158,6 @@ public class StatisticsEngine
     private final RTCPPacketParserEx parser = new RTCPPacketParserEx();
 
     /**
-     * The <tt>Function</tt> that generates <tt>RawPacket</tt>s from
-     * <tt>RTCPCompoundPacket</tt>s.
-     */
-    private RTCPGenerator generator = new RTCPGenerator();
-
-    /**
      * The <tt>PacketTransformer</tt> instance to use for RTP.
      */
     private final PacketTransformer rtpTransformer = new RTPPacketTransformer();
@@ -925,17 +919,12 @@ public class StatisticsEngine
                 return pkt;
             }
 
-            List<RTCPPacket> out = new LinkedList<>();
-            boolean modified;
-
             try
             {
-                modified
-                    = updateReceivedMediaStreamStats(compound.packets, out);
+                updateReceivedMediaStreamStats(compound.packets);
             }
             catch (Throwable t)
             {
-                modified = false;
                 if (t instanceof InterruptedException)
                 {
                     Thread.currentThread().interrupt();
@@ -952,23 +941,6 @@ public class StatisticsEngine
                             t);
                 }
             }
-
-            if (!modified)
-            {
-                return pkt; // no change was introduced
-            }
-            else if (out.isEmpty())
-            {
-                return null; // all RTCP packets were consumed
-            }
-            else
-            {
-                RTCPCompoundPacket outPacket
-                    = new RTCPCompoundPacket(
-                            out.toArray(new RTCPPacket[out.size()]));
-
-                pkt = generator.apply(outPacket);
-            }
         }
 
         return pkt;
@@ -979,37 +951,16 @@ public class StatisticsEngine
      * packets and updates the {@link MediaStreamStats}. Adds to {@code out} the
      * ones which were not consumed and should be output from this instance.
      * @param in the input packets
-     * @param out the list to which non-consumed packets will be added.
      * @return {@code true} iff some packets were consumed.
      */
-    private boolean updateReceivedMediaStreamStats(
-            RTCPPacket[] in,
-            List<RTCPPacket> out)
+    private void updateReceivedMediaStreamStats(RTCPPacket[] in)
     {
-        boolean removed = false;
         MediaStreamStatsImpl streamStats = mediaStream.getMediaStreamStats();
 
         for (RTCPPacket rtcp : in)
         {
             switch (rtcp.type)
             {
-            case RTCPFBPacket.PSFB:
-                if (rtcp instanceof RTCPREMBPacket)
-                {
-                    RTCPREMBPacket remb = (RTCPREMBPacket) rtcp;
-
-                    if (logger.isTraceEnabled())
-                    {
-                        logger.trace(
-                                "Received estimated bitrate (bps): "
-                                        + remb.getBitrate() + ", dest: "
-                                        + Arrays.toString(remb.getDest()));
-                    }
-                    streamStats.rembReceived(remb);
-                    out.add(rtcp);
-                }
-                break;
-
             case RTCPPacket.RR:
             case RTCPPacket.SR:
                 {
@@ -1034,26 +985,8 @@ public class StatisticsEngine
                 {
                     streamStats.getRTCPReports().rtcpReportReceived(report);
                 }
-
-                out.add(rtcp);
                 }
                 break;
-
-            case RTCPFBPacket.RTPFB:
-                if (rtcp instanceof NACKPacket)
-                {
-                    NACKPacket nack = (NACKPacket) rtcp;
-
-                    streamStats.nackReceived(nack);
-
-                    // Note that we drop NACK packets here, and leave it as a
-                    // responsibility of the user application to handle them, if
-                    // necessary (i.e. forward the NACK packet somewhere, or
-                    // retransmit RTP packets).
-                    removed = true;
-                }
-                break;
-
             case RTCPExtendedReport.XR:
                 if (rtcp instanceof RTCPExtendedReport)
                 {
@@ -1063,17 +996,10 @@ public class StatisticsEngine
                     // Remove any RTP Control Protocol Extended Report (RTCP XR)
                     // packets because neither FMJ, nor
                     // RTCPSenderReport/RTCPReceiverReport understands them.
-                    removed = true;
                 }
-                break;
-
-            default:
-                // These types of RTCP packets are of no interest at present.
                 break;
             }
         }
-
-        return removed;
     }
 
     /**

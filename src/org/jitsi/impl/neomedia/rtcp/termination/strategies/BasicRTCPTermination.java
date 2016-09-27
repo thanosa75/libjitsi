@@ -25,6 +25,7 @@ import org.jitsi.impl.neomedia.*;
 import org.jitsi.impl.neomedia.rtcp.*;
 import org.jitsi.impl.neomedia.rtp.*;
 import org.jitsi.impl.neomedia.transform.*;
+import org.jitsi.service.libjitsi.*;
 import org.jitsi.service.neomedia.*;
 import org.jitsi.service.neomedia.rtp.*;
 import org.jitsi.util.*;
@@ -33,7 +34,7 @@ import org.jitsi.util.function.*;
 
 /**
  *
- * The <tt>BasicRTCPTerminationStrategy</tt> "gateways" PLIs, FIRs, NACKs,
+ * The <tt>BasicRTCPTermination</tt> "gateways" PLIs, FIRs, NACKs,
  * etc, in the sense that it replaces the packet sender information in the
  * PLIs, FIRs, NACKs, etc and it generates its own SRs/RRs/REMBs based on
  * information that it collects and from information found in FMJ.
@@ -41,16 +42,28 @@ import org.jitsi.util.function.*;
  * @author George Politis
  * @author Lyubomir Marinov
  */
-public class BasicRTCPTerminationStrategy
-    extends MediaStreamRTCPTerminationStrategy
-    implements RecurringRunnable
+public class BasicRTCPTermination
+    implements RecurringRunnable, TransformEngine
 {
     /**
-     * The <tt>Logger</tt> used by the <tt>BasicRTCPTerminationStrategy</tt>
+     * The name of the property which specifies the FQN name of the RTCP
+     * strategy to use by default.
+     */
+    public static final String RTCP_TERMINATION_STRATEGY_PNAME
+        = "org.jitsi.videobridge.rtcp.strategy";
+
+    /**
+     * The name of the property used to disable NACK termination.
+     */
+    public static final String DISABLE_NACK_TERMINATION_PNAME
+        = "org.jitsi.videobridge.DISABLE_NACK_TERMINATION";
+
+    /**
+     * The <tt>Logger</tt> used by the <tt>BasicRTCPTermination</tt>
      * class and its instances to print debug information.
      */
     private static final Logger logger
-        = Logger.getLogger(BasicRTCPTerminationStrategy.class);
+        = Logger.getLogger(BasicRTCPTermination.class);
 
     /**
      * The maximum number of RTCP report blocks that an RR or an SR can
@@ -81,13 +94,13 @@ public class BasicRTCPTerminationStrategy
 
     /**
      * The maximum transmission unit (MTU) to be assumed by
-     * {@code BasicRTCPTerminationStrategy}.
+     * {@code BasicRTCPTermination}.
      */
     private static final int MTU = 1024 + 256;
 
     /**
      * The RTP stats map that holds RTP statistics about all the streams that
-     * this <tt>BasicRTCPTerminationStrategy</tt> (as a
+     * this <tt>BasicRTCPTermination</tt> (as a
      * <tt>TransformEngine</tt>) has observed.
      */
     private final RTPStatsMap rtpStatsMap = new RTPStatsMap();
@@ -130,22 +143,60 @@ public class BasicRTCPTerminationStrategy
 
     /**
      * The RTP <tt>PacketTransformer</tt> of this
-     * <tt>BasicRTCPTerminationStrategy</tt>.
+     * <tt>BasicRTCPTermination</tt>.
      */
     private final PacketTransformer rtpTransformer
         = new RTPPacketTransformerImpl();
 
     /**
      * The RTCP <tt>PacketTransformer</tt> of this
-     * <tt>BasicRTCPTerminationStrategy</tt>.
+     * <tt>BasicRTCPTermination</tt>.
      */
     private final PacketTransformer rtcpTransformer
         = new RTCPPacketTransformerImpl();
 
     /**
+     * The {@code MediaStream} that this instance terminates RTCP for.
+     */
+    private final MediaStream stream;
+
+    /**
+     * A boolean indicating whether we should handle NACKs or not.
+     */
+    private final boolean disableNackTermination;
+
+    /**
      * A counter that counts the number of times we've sent "full-blown" SDES.
      */
     private int sdesCounter = 0;
+
+    /**
+     * Ctor.
+     *
+     * @param stream the {@code MediaStream} that this instance will terminate
+     * RTCP for.
+     */
+    public BasicRTCPTermination(MediaStream stream)
+    {
+        this.stream = stream;
+
+        this.disableNackTermination = LibJitsi.getConfigurationService()
+            .getBoolean(DISABLE_NACK_TERMINATION_PNAME, false);
+
+        if (!disableNackTermination)
+        {
+            RawPacketCache cache = stream.getPacketCache();
+            if (cache != null)
+            {
+                stream.getPacketCache().setEnabled(true);
+            }
+            else
+            {
+                logger.warn("NACK termination is enabled, but we don't have" +
+                    " a packet cache.");
+            }
+        }
+    }
 
     /**
      * {@inheritDoc}
@@ -582,7 +633,7 @@ public class BasicRTCPTerminationStrategy
      */
     private long getLocalSSRC()
     {
-        return getStream().getStreamRTPManager().getLocalSSRC();
+        return stream.getStreamRTPManager().getLocalSSRC();
     }
 
     /**
@@ -651,7 +702,6 @@ public class BasicRTCPTerminationStrategy
      */
     private RTCPReportBlock[] makeReportBlocks(long time)
     {
-        MediaStream stream = getStream();
         // State validation.
         if (stream == null)
         {
@@ -734,7 +784,7 @@ public class BasicRTCPTerminationStrategy
         // TODO we should only make REMBs if REMB support has been advertised.
         // Destination
         RemoteBitrateEstimator remoteBitrateEstimator
-            = ((VideoMediaStream) getStream()).getRemoteBitrateEstimator();
+            = ((VideoMediaStream) stream).getRemoteBitrateEstimator();
 
         Collection<Integer> ssrcs = remoteBitrateEstimator.getSsrcs();
 
@@ -801,20 +851,19 @@ public class BasicRTCPTerminationStrategy
      */
     private List<RTCPSRPacket> makeSRs(long time)
     {
-        MediaStreamImpl mediaStream = getMediaStreamImpl();
         List<RTCPSRPacket> srs = new ArrayList<>();
 
         for (RTPStatsEntry rtpStatsEntry : rtpStatsMap.values())
         {
             int ssrc = rtpStatsEntry.getSsrc();
-            RemoteClock remoteClock = mediaStream.getStreamRTPManager()
+            RemoteClock remoteClock = stream.getStreamRTPManager()
                 .findRemoteClock(ssrc & 0xffffffffl);
 
             if (remoteClock == null)
             {
                 logger.warn("We're not going to go far without a remote clock. "
                     + "ssrc=" + (ssrc & 0xffffffffl)
-                    + ", streamHashCode=" + mediaStream.hashCode());
+                    + ", streamHashCode=" + stream.hashCode());
                 continue;
             }
             Timestamp remoteTs;
@@ -823,7 +872,7 @@ public class BasicRTCPTerminationStrategy
             {
                 logger.warn("We're not going to go far without an estimate. "
                     + "ssrc=" + (ssrc & 0xffffffffl)
-                    + ", streamHashCode=" + mediaStream.hashCode());
+                    + ", streamHashCode=" + stream.hashCode());
                 continue;
             }
 
@@ -860,7 +909,7 @@ public class BasicRTCPTerminationStrategy
     {
         // Create an SDES for our own SSRC.
         SSRCInfo ourinfo
-            = getStream().getStreamRTPManager().getSSRCCache().ourssrc;
+            = stream.getStreamRTPManager().getSSRCCache().ourssrc;
         Collection<RTCPSDESItem> ownItems = new ArrayList<>();
 
         // CNAME
@@ -969,6 +1018,80 @@ public class BasicRTCPTerminationStrategy
     public void run()
     {
         rtcpReporter.run();
+    }
+
+    /**
+     * Handles an incoming RTCP REMB packet from a receiver.
+     * @param pkt
+     */
+    private void rembReceived(RawPacket pkt)
+    {
+        long receiverEstimate = RTCPREMBPacket.getBitrate(pkt);
+        ((VideoMediaStream) stream).getOrCreateBandwidthEstimator()
+            .updateReceiverEstimate(receiverEstimate);
+    }
+
+    /**
+     * Handles an incoming RTCP NACK packet from a receiver.
+     */
+    private void nackReceived(RawPacket pktNack)
+    {
+        long ssrc = NACKPacket.getSourceSSRC(pktNack);
+        Set<Integer> lostPackets = NACKPacket.getLostPackets(pktNack);
+
+        if (logger.isDebugEnabled())
+        {
+            logger.debug(
+                "Received NACK on stream " + stream.hashCode()
+                    +" for SSRC " + ssrc
+                    + ". Packets reported lost: " + lostPackets);
+        }
+
+        RawPacketCache cache;
+        RtxTransformer rtxTransformer;
+
+        if ((cache = stream.getPacketCache()) != null
+            && (rtxTransformer = stream.getRtxTransformer())
+            != null)
+        {
+            // XXX The retransmission of packets MUST take into account SSRC
+            // rewriting. Which it may do by injecting retransmitted packets
+            // AFTER the SsrcRewritingEngine. Since the retransmitted packets
+            // have been cached by cache and cache is a TransformEngine, the
+            // injection may as well happen after cache.
+            TransformEngine after
+                = (cache instanceof TransformEngine)
+                ? (TransformEngine) cache
+                : null;
+
+            for (Iterator<Integer> i = lostPackets.iterator(); i.hasNext();)
+            {
+                int seq = i.next();
+                RawPacket pkt = cache.get(ssrc, seq);
+
+                if (pkt != null)
+                {
+                    if (logger.isDebugEnabled())
+                    {
+                        logger.debug(
+                            "Retransmitting packet from cache. SSRC " + ssrc
+                                + " seq " + seq);
+                    }
+                    if (rtxTransformer.retransmit(pkt, after))
+                    {
+                        i.remove();
+                    }
+                }
+            }
+        }
+
+        if (!lostPackets.isEmpty())
+        {
+            // If retransmission requests are enabled, videobridge assumes
+            // the responsibility of requesting missing packets.
+            logger.debug("Packets missing from the cache. Ignoring, because"
+                + " retransmission requests are enabled.");
+        }
     }
 
     /**
@@ -1114,10 +1237,10 @@ public class BasicRTCPTerminationStrategy
             {
                 try
                 {
-                    getStream().injectPacket(
+                    stream.injectPacket(
                             pkt,
                             /* data */ false,
-                            BasicRTCPTerminationStrategy.this);
+                            BasicRTCPTermination.this);
 
                     // TODO update transmission stats.
                     /*if (ssrcInfo instanceof SendSSRCInfo)
@@ -1236,6 +1359,36 @@ public class BasicRTCPTerminationStrategy
 
             // Remove SRs and RRs from the RTCP packet.
             return feedbackGateway.gateway(compound);
+        }
+
+        /**
+         * {@inheritDoc}
+         */
+        public RawPacket reverseTransform(RawPacket pkt)
+        {
+            RTCPIterator it = new RTCPIterator(pkt);
+
+            while (it.hasNext())
+            {
+                RawPacket next = it.next();
+                int rc = RTCPHeaderUtils.getReportCount(next);
+                int pt = RTCPHeaderUtils.getPacketType(next);
+                if (pt == RTCPFBPacket.RTPFB && rc == NACKPacket.FMT)
+                {
+                    if (!disableNackTermination)
+                    {
+                        nackReceived(next);
+                        it.remove();
+                    }
+                }
+                else if (pt == RTCPFBPacket.PSFB && rc == RTCPREMBPacket.FMT)
+                {
+                    rembReceived(next);
+                    it.remove();
+                }
+            }
+
+            return pkt;
         }
     }
 

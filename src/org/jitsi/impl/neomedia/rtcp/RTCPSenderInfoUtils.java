@@ -76,26 +76,6 @@ public class RTCPSenderInfoUtils
     }
 
     /**
-     *
-     * @param buf the byte buffer that contains the RTCP sender info.
-     * @param off the offset in the byte buffer where the RTCP sender info
-     * starts.
-     * @param len the number of bytes in buffer which constitute the actual
-     * data.
-     *
-     * @return true if the RTCP sender info is valid, false otherwise.
-     */
-    public static boolean isValid(byte[] buf, int off, int len)
-    {
-        if (buf == null || buf.length < off + Math.max(len, RTCPSenderInfo.SIZE))
-        {
-            return false;
-        }
-
-        return true;
-    }
-
-    /**
      * Gets the NTP timestamp MSW.
      *
      * @param buf the byte buffer that contains the RTCP sender info.
@@ -133,5 +113,27 @@ public class RTCPSenderInfoUtils
         }
 
         return RawPacket.readInt(buf, off + 4, len) & 0xffffffffl;
+    }
+
+    /**
+     *
+     * @param buf the byte buffer that contains the RTCP sender info.
+     * @param off the offset in the byte buffer where the RTCP sender info
+     * starts.
+     * @param len the number of bytes in buffer which constitute the actual
+     * data.
+     *
+     * @return true if the RTCP sender info is valid, false otherwise.
+     */
+    private static boolean isValid(byte[] buf, int off, int len)
+    {
+        if (buf == null
+            || buf.length < off + Math.max(len, RTCPSenderInfo.SIZE)
+            || len < RTCPSenderInfo.SIZE)
+        {
+            return false;
+        }
+
+        return true;
     }
 }

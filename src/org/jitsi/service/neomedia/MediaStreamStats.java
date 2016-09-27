@@ -404,18 +404,6 @@ public interface MediaStreamStats
     public long getUploadNbPacketLost();
 
     /**
-     * Adds a listener which will be notified when NACK packets are received.
-     * @param listener the listener.
-     */
-    public void addNackListener(NACKListener listener);
-
-    /**
-     * Adds a listener which will be notified when REMB packets are received.
-     * @param listener the listener.
-     */
-    public void addRembListener(REMBListener listener);
-
-    /**
      * Gets the rate at which we are currently sending data to the remote
      * endpoint in bits per second. This is almost the same as {@link
      * #getUploadRateKiloBitPerSec()}. The duplication is necessary, because

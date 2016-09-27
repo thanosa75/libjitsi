@@ -186,6 +186,13 @@ public interface MediaStream
     public MediaFormat getFormat();
 
     /**
+     *
+     * @param pt
+     * @return
+     */
+    public MediaFormat getRemoteFormat(byte pt);
+
+    /**
      * Returns the synchronization source (SSRC) identifier of the local
      * participant or <tt>-1</tt> if that identifier is not yet known at this
      * point.
@@ -520,25 +527,6 @@ public interface MediaStream
      * @return true if the packet is a key frame, false otherwise.
      */
     public boolean isKeyFrame(byte[] buf, int off, int len);
-    /**
-     * Gets the current active <tt>RTCPTerminationStrategy</tt> which is to
-     * inspect and modify RTCP traffic between multiple <tt>MediaStream</tt>s.
-     *
-     * @return the <tt>RTCPTerminationStrategy</tt> which is to inspect and
-     * modify RTCP traffic between multiple <tt>MediaStream</tt>s.
-     */
-    public RTCPTerminationStrategy getRTCPTerminationStrategy();
-
-    /**
-     * Sets the current active <tt>RTCPTerminationStrategy</tt> which is to
-     * inspect and modify RTCP traffic between multiple <tt>MediaStream</tt>s.
-     *
-     * @param rtcpTerminationStrategy the <tt>RTCPTerminationStrategy</tt> which
-     * is to inspect and modify RTCP traffic between multiple
-     * <tt>MediaStream</tt>s.
-     */
-    public void setRTCPTerminationStrategy(
-        RTCPTerminationStrategy rtcpTerminationStrategy);
 
     /**
      * Gets the {@link RawPacketCache} which (optionally) caches outgoing
@@ -551,6 +539,12 @@ public interface MediaStream
      * @return the {@link RetransmissionRequester} for this media stream.
      */
     public RetransmissionRequester getRetransmissionRequester();
+
+    /**
+     *
+     * @return
+     */
+    public RtxTransformer getRtxTransformer();
 
     /**
      * Gets the {@link TransformEngineChain} of this {@link MediaStream}.

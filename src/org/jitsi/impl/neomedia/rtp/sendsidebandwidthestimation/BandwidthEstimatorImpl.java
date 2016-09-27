@@ -89,7 +89,6 @@ public class BandwidthEstimatorImpl
 
         // Hook us up to receive Report Blocks and REMBs.
         MediaStreamStats stats = stream.getMediaStreamStats();
-        stats.addRembListener(sendSideBandwidthEstimation);
         stats.getRTCPReports().addRTCPReportListener(this);
     }
 
@@ -175,6 +174,12 @@ public class BandwidthEstimatorImpl
     public void removeListener(Listener listener)
     {
         sendSideBandwidthEstimation.removeListener(listener);
+    }
+
+    @Override
+    public void updateReceiverEstimate(long bandwidth)
+    {
+        sendSideBandwidthEstimation.updateReceiverEstimate(bandwidth);
     }
 
     /**

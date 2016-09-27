@@ -15,6 +15,7 @@
  */
 package org.jitsi.impl.neomedia.codec.video.vp8;
 
+import net.sf.fmj.media.rtp.*;
 import org.jitsi.impl.neomedia.codec.*;
 import org.jitsi.service.neomedia.codec.*;
 import org.jitsi.util.*;
@@ -426,7 +427,9 @@ public class DePacketizer
      */
     public static boolean isKeyFrame(byte[] buff, int off, int len)
     {
-        if (buff == null || len < 1 || buff.length < off + len)
+        if (buff == null
+            || len < RTPHeader.SIZE
+            || buff.length < off + Math.max(len, RTPHeader.SIZE))
         {
             return false;
         }

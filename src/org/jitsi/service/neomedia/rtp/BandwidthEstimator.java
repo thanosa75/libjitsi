@@ -17,11 +17,13 @@ package org.jitsi.service.neomedia.rtp;
 
 /**
  * @author Boris Grozev
+ * @author George Politis
  */
 public interface BandwidthEstimator
 {
     public void addListener(Listener listener);
     public void removeListener(Listener listener);
+    public void updateReceiverEstimate(long bandwidth);
 
     public interface Listener
     {
