@@ -1027,11 +1027,6 @@ public class MediaStreamImpl
 
         engineChain.add(externalTransformerWrapper);
 
-        // RTX
-        RtxTransformer rtxTransformer = getRtxTransformer();
-        if (rtxTransformer != null)
-            engineChain.add(rtxTransformer);
-
         // here comes the override payload type transformer
         // as it changes headers of packets, need to go before encryption
         if (ptTransformEngine == null)
@@ -1052,6 +1047,11 @@ public class MediaStreamImpl
         SsrcRewritingEngine ssrcRewritingEngine = getSsrcRewritingEngine();
         if (ssrcRewritingEngine != null)
             engineChain.add(ssrcRewritingEngine);
+
+        // RTX
+        RtxTransformer rtxTransformer = getRtxTransformer();
+        if (rtxTransformer != null)
+            engineChain.add(rtxTransformer);
 
         if (cachingTransformer != null)
         {
