@@ -314,6 +314,12 @@ public class MediaStreamImpl
     private DebugTransformEngine debugTransformEngine;
 
     /**
+     * The {@code TransformEngine} instance that removes incoming duplicate RTP
+     * packets.
+     */
+    private TransformEngine dedupTransformer = new DedupTransformer(this);
+
+    /**
      * The <tt>TransformEngine</tt> instance registered in the
      * <tt>RTPConnector</tt>'s transformer chain, which allows the "external"
      * transformer to be swapped.
@@ -1047,6 +1053,11 @@ public class MediaStreamImpl
         SsrcRewritingEngine ssrcRewritingEngine = getSsrcRewritingEngine();
         if (ssrcRewritingEngine != null)
             engineChain.add(ssrcRewritingEngine);
+
+        // Deduplicate incoming RTP packets. SRTP takes care of this for raw
+        // RTP packets, this transformer runs after the deRTX step.
+        if (dedupTransformer != null)
+            engineChain.add(dedupTransformer);
 
         // RTX
         RtxTransformer rtxTransformer = getRtxTransformer();
