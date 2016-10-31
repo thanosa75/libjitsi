@@ -16,6 +16,11 @@
 package org.jitsi.impl.neomedia;
 
 
+import net.sf.fmj.media.rtp.*;
+import org.jitsi.service.neomedia.*;
+
+import java.util.*;
+
 /**
  * When using TransformConnector, a RTP/RTCP packet is represented using
  * RawPacket. RawPacket stores the buffer holding the RTP/RTCP packet, as well
@@ -39,6 +44,7 @@ package org.jitsi.impl.neomedia;
  * @author George Politis
  */
 public class RawPacket
+    implements ByteArrayBuffer
 {
     /**
      * The size of the extension header as defined by RFC 3550.
@@ -399,6 +405,7 @@ public class RawPacket
      *
      * @return buffer containing the content of this packet
      */
+    @Override
     public byte[] getBuffer()
     {
         return this.buffer;
@@ -659,6 +666,7 @@ public class RawPacket
      *
      * @return length of this packet's data
      */
+    @Override
     public int getLength()
     {
         return length;
@@ -693,6 +701,7 @@ public class RawPacket
      *
      * @return start offset of this packet's data inside storing buffer
      */
+    @Override
     public int getOffset()
     {
         return this.offset;
@@ -704,7 +713,17 @@ public class RawPacket
      */
     public int getVersion()
     {
-        return (buffer[offset] & 0xC0) >>> 6;
+        return getVersion(this);
+    }
+
+    public static int getVersion(ByteArrayBuffer baf)
+    {
+        if (baf == null)
+        {
+            return -1;
+        }
+
+        return (baf.getBuffer()[baf.getOffset()] & 0xC0) >>> 6;
     }
 
     /**
@@ -810,7 +829,7 @@ public class RawPacket
      */
     public byte getPayloadType()
     {
-        return getPayloadType(buffer, offset, length);
+        return (byte) getPayloadType(buffer, offset, length);
     }
 
     /**
@@ -818,9 +837,14 @@ public class RawPacket
      *
      * @return RTP payload type of source RTP packet
      */
-    public static Byte getPayloadType(byte[] buf, int off, int len)
+    public static int getPayloadType(byte[] buf, int off, int len)
     {
-        return (byte) (buf[off + 1] & (byte)0x7F);
+        if (buf == null || buf.length < off + 2)
+        {
+            return -1;
+        }
+
+        return (buf[off + 1] & (byte)0x7F);
     }
 
     /**
@@ -875,6 +899,16 @@ public class RawPacket
     public static int getSequenceNumber(byte[] buffer, int offset, int length)
     {
         return readUnsignedShortAsInt(buffer, offset + 2, length);
+    }
+
+    public static int getSequenceNumber(ByteArrayBuffer baf)
+    {
+        if (baf == null)
+        {
+            return -1;
+        }
+
+        return getSequenceNumber(baf.getBuffer(), baf.getOffset(), baf.getLength());
     }
 
     /**
@@ -967,6 +1001,16 @@ public class RawPacket
         return getSSRC(buffer, offset, length) & 0xffffffffL;
     }
 
+    public static long getSSRCAsLong(ByteArrayBuffer baf)
+    {
+        if (baf == null)
+        {
+            return -1;
+        }
+
+        return getSSRCAsLong(baf.getBuffer(), baf.getOffset(), baf.getLength());
+    }
+
     /**
      * Returns the timestamp for this RTP <tt>RawPacket</tt>.
      *
@@ -990,6 +1034,16 @@ public class RawPacket
     public static long getTimestamp(byte[] buf, int off, int len)
     {
         return readInt(buf, off + 4, len) & 0xffffffffl;
+    }
+
+    public static long getTimestamp(ByteArrayBuffer baf)
+    {
+        if (baf == null)
+        {
+            return -1;
+        }
+
+        return getTimestamp(baf.getBuffer(), baf.getOffset(), baf.getLength());
     }
 
     /**
@@ -1484,5 +1538,474 @@ public class RawPacket
             .append(']');
 
         return sb.toString();
+    }
+
+    /**
+     *
+     * @param baf
+     * @return
+     */
+    public static int getPayloadType(ByteArrayBuffer baf)
+    {
+        if (baf == null)
+        {
+            return -1;
+        }
+
+        return getPayloadType(baf.getBuffer(), baf.getOffset(), baf.getLength());
+    }
+
+    /**
+     *
+     * @param baf
+     * @return
+     */
+    public static int getPayloadOffset(ByteArrayBuffer baf)
+    {
+        if (baf == null)
+        {
+            return -1;
+        }
+
+        return getPayloadOffset(baf.getBuffer(), baf.getOffset(), baf.getLength());
+    }
+
+    /**
+     *
+     * @param baf
+     * @return
+     */
+    public static int getPayloadLength(ByteArrayBuffer baf)
+    {
+        if (baf == null)
+        {
+            return -1;
+        }
+
+        return getPayloadLength(baf.getBuffer(), baf.getOffset(), baf.getLength())
+            - RawPacket.getPayloadOffset(baf)
+            - RawPacket.getHeaderLength(baf);
+    }
+
+    /**
+     *
+     * @param baf
+     * @return
+     */
+    public static int getHeaderLength(ByteArrayBuffer baf)
+    {
+        if (baf == null)
+        {
+            return -1;
+        }
+
+        return getHeaderLength(baf.getBuffer(), baf.getOffset(), baf.getLength());
+    }
+
+    /**
+     * Utility class that contains static methods for RTCP sender info manipulation.
+     *
+     * TODO maybe merge into the RTCPSenderInfo class.
+     *
+     * @author George Politis
+     */
+    public static class RTCPSenderInfoUtils
+    {
+        /**
+         * Gets the RTP timestamp.
+         *
+         * @param buf the byte buffer that contains the RTCP sender info.
+         * @param off the offset in the byte buffer where the RTCP sender info
+         * starts.
+         * @param len the number of bytes in buffer which constitute the actual
+         * data.
+         * @return the RTP timestamp, or -1 in case of an error.
+         */
+        public static long getTimestamp(byte[] buf, int off, int len)
+        {
+            if (!isValid(buf, off, len))
+            {
+                return -1;
+            }
+
+            return readInt(buf, off + 8, len) & 0xffffffffl;
+        }
+
+        /**
+         * Sets the RTP timestamp.
+         *
+         * @param buf the byte buffer that contains the RTCP sender info.
+         * @param off the offset in the byte buffer where the RTCP sender info
+         * starts.
+         * @param len the number of bytes in buffer which constitute the actual
+         * data.
+         * @param ts the new timestamp to be set.
+         *
+         * @return the number of bytes written.
+         */
+        public static boolean setTimestamp(
+            byte[] buf, int off, int len, long ts)
+        {
+            if (!isValid(buf, off, len))
+            {
+                return false;
+            }
+
+            buf[off + 8] = (byte)(ts>>24);
+            buf[off + 9] = (byte)(ts>>16);
+            buf[off + 10] = (byte)(ts>>8);
+            buf[off + 11] = (byte)ts;
+
+            return true;
+        }
+
+        /**
+         * Gets the NTP timestamp MSW.
+         *
+         * @param buf the byte buffer that contains the RTCP sender info.
+         * @param off the offset in the byte buffer where the RTCP sender info
+         * starts.
+         * @param len the number of bytes in buffer which constitute the actual
+         * data.
+         * @return the RTP timestamp, or -1 in case of an error.
+         */
+        public static long getNtpTimestampMSW(byte[] buf, int off, int len)
+        {
+            if (!isValid(buf, off, len))
+            {
+                return -1;
+            }
+
+            return readInt(buf, off, len) & 0xffffffffl;
+        }
+
+        /**
+         * Gets the NTP timestamp LSW.
+         *
+         * @param buf the byte buffer that contains the RTCP sender info.
+         * @param off the offset in the byte buffer where the RTCP sender info
+         * starts.
+         * @param len the number of bytes in buffer which constitute the actual
+         * data.
+         * @return the RTP timestamp, or -1 in case of an error.
+         */
+        public static long getNtpTimestampLSW(byte[] buf, int off, int len)
+        {
+            if (!isValid(buf, off, len))
+            {
+                return -1;
+            }
+
+            return readInt(buf, off + 4, len) & 0xffffffffl;
+        }
+
+        /**
+         *
+         * @param buf the byte buffer that contains the RTCP sender info.
+         * @param off the offset in the byte buffer where the RTCP sender info
+         * starts.
+         * @param len the number of bytes in buffer which constitute the actual
+         * data.
+         *
+         * @return true if the RTCP sender info is valid, false otherwise.
+         */
+        private static boolean isValid(byte[] buf, int off, int len)
+        {
+            if (buf == null
+                || buf.length < off + Math.max(len, RTCPSenderInfo.SIZE)
+                || len < RTCPSenderInfo.SIZE)
+            {
+                return false;
+            }
+
+            return true;
+        }
+
+        /**
+         *
+         * @param baf
+         * @return
+         */
+        public static long getTimestamp(ByteArrayBuffer baf)
+        {
+            if (baf == null)
+            {
+                return -1;
+            }
+
+            return getTimestamp(baf.getBuffer(), baf.getOffset(), baf.getLength());
+        }
+    }
+
+    /**
+     * Utility class that contains static methods for RTCP header manipulation.
+     *
+     * TODO maybe merge into the RTCPHeader class.
+     *
+     * @author George Politis
+     */
+    public static class RTCPHeaderUtils
+    {
+        /**
+         * Gets the RTCP packet type.
+         *
+         * @param buf the byte buffer that contains the RTCP header.
+         * @param off the offset in the byte buffer where the RTCP header starts.
+         * @param len the number of bytes in buffer which constitute the actual
+         * data.
+         * @return the unsigned RTCP packet type, or -1 in case of an error.
+         */
+        public static int getPacketType(byte[] buf, int off, int len)
+        {
+            if (getLength(buf, off, len) < RTCPHeader.SIZE)
+            {
+                return -1;
+            }
+
+            return buf[off + 1] & 0xff;
+        }
+
+        /**
+         * Gets the RTCP packet type.
+         *
+         * @param pkt the <tt>SimpleBUffer</tt> that contains the RTCP header.
+         * @return the unsigned RTCP packet type, or -1 in case of an error.
+         */
+        public static int getPacketType(ByteArrayBuffer pkt)
+        {
+            if (pkt == null)
+            {
+                return -1;
+            }
+
+            return getPacketType(pkt.getBuffer(), pkt.getOffset(), pkt.getLength());
+        }
+
+        /**
+         * Gets the RTCP sender SSRC.
+         *
+         * @param buf the byte buffer that contains the RTCP header.
+         * @param off the offset in the byte buffer where the RTCP header starts.
+         * @param len the number of bytes in buffer which constitute the actual
+         * data.
+         * @return the unsigned RTCP sender SSRC, or -1 in case of an error.
+         */
+        public static long getSenderSSRC(byte[] buf, int off, int len)
+        {
+            if (getLength(buf, off, len) < RTCPHeader.SIZE)
+            {
+                return -1;
+            }
+
+            return readInt(buf, off + 4, len) & 0xffffffffl;
+        }
+
+        /**
+         * Gets the RTCP packet length in bytes.
+         *
+         * @param buf the byte buffer that contains the RTCP header.
+         * @param off the offset in the byte buffer where the RTCP header starts.
+         * @param len the number of bytes in buffer which constitute the actual
+         * data.
+         * @return  the RTCP packet length in bytes, or -1 in case of an error.
+         */
+        public static int getLength(byte[] buf, int off, int len)
+        {
+            if (buf == null
+                || buf.length < off + Math.max(len, RTCPHeader.SIZE)
+                || len < RTCPHeader.SIZE)
+            {
+                return -1;
+            }
+
+            if (RTCPHeader.VERSION != (buf[off] & 0xc0) >>> 6)
+            {
+                return -1;
+            }
+
+            int lengthInWords
+                = ((buf[off + 2] & 0xff) << 8) | (buf[off + 3] & 0xff);
+
+            return (lengthInWords + 1) * 4;
+        }
+
+        /**
+         * Gets the RTCP packet length in bytes.
+         *
+         * @param pkt the byte buffer that contains the RTCP header.
+         * @return the RTCP packet length in bytes, or -1 in case of an error.
+         */
+        public static int getLength(ByteArrayBuffer pkt)
+        {
+            if (pkt == null)
+            {
+                return -1;
+            }
+
+            return getLength(pkt.getBuffer(), pkt.getOffset(), pkt.getLength());
+        }
+
+        /**
+         * Gets the RTCP packet report count.
+         *
+         * @param buf the byte buffer that contains the RTCP header.
+         * @param off the offset in the byte buffer where the RTCP header starts.
+         * @param len the number of bytes in buffer which constitute the actual
+         * data.
+         * @return the RTCP packet report count, or -1 in case of an error.
+         */
+        public static int getReportCount(byte[] buf, int off, int len)
+        {
+            if (getLength(buf, off, len) < RTCPHeader.SIZE)
+            {
+                return -1;
+            }
+
+            return (buf[off] & 0x1F);
+        }
+
+        /**
+         * Gets the RTCP packet report count.
+         *
+         * @param pkt the <tt>RawPacket</tt> that contains the RTCP header.
+         * @return the RTCP packet report count, or -1 in case of an error.
+         */
+        public static int getReportCount(ByteArrayBuffer pkt)
+        {
+            if (pkt == null)
+            {
+                return -1;
+            }
+
+            return getReportCount(pkt.getBuffer(), pkt.getOffset(), pkt.getLength());
+        }
+
+        /**
+         *
+         * @param baf
+         * @return
+         */
+        public static long getSenderSSRC(ByteArrayBuffer baf)
+        {
+            if (baf == null)
+            {
+                return -1;
+
+            }
+            return getSenderSSRC(baf.getBuffer(), baf.getOffset(), baf.getLength());
+        }
+    }
+
+    public static class NACKPacketUtils
+    {
+
+        /**
+         * Gets the lost packets (expressed as sequence numbers) that are found in
+         * the NACK packet that is passed in as a parameter.
+         *
+         * @param buf the byte buffer that holds the NACK packet.
+         * @param off the offset in the byte buffer where the NACK packet begins.
+         * @param len the length of the NACK packet in the byte buffer.
+         * @return the lost packets (expressed as sequence numbers) that are found
+         * in the NACK packet that is passed in as a parameter, or null if it's an
+         * invalid packet.
+         */
+        public static Set<Integer> getLostPackets(byte[] buf, int off, int len)
+        {
+            int pktLen = RTCPHeaderUtils.getLength(buf, off, len);
+            if (pktLen < RTCPHeader.SIZE + 8)
+            {
+                return null;
+            }
+
+            int fciOff = off + RTCPHeader.SIZE + 8;
+            int fciLen = pktLen - (RTCPHeader.SIZE + 8);
+
+            Set<Integer> lostPackets = new TreeSet<>();
+            for (int i = 0; i < (fciLen / 4); i++)
+            {
+                int pid = (0xFF & buf[fciOff + i * 4 + 0]) << 8
+                    | (0xFF & buf[fciOff + i * 4 + 1]);
+                lostPackets.add(pid);
+
+                // First byte of the BLP
+                for (int j = 0; j < 8; j++)
+                    if (0 != (buf[fciOff + i * 4 + 2] & (1 << j)))
+                        lostPackets.add((pid + 1 + 8 + j) % (1 << 16));
+
+                // Second byte of the BLP
+                for (int j = 0; j < 8; j++)
+                    if (0 != (buf[fciOff + i * 4 + 3] & (1 << j)))
+                        lostPackets.add((pid + 1 + j) % (1 << 16));
+            }
+
+            return lostPackets;
+        }
+
+        /**
+         * Gets the lost packets (expressed as sequence numbers) that are found in
+         * the NACK packet that is passed in as a parameter.
+         *
+         * @param pkt the {@code RawPacket} that holds the NACK packet.
+         * @return the lost packets (expressed as sequence numbers) that are found
+         * in the NACK packet that is passed in as a parameter, or null if it's an
+         * invalid packet.
+         */
+        public static Set<Integer> getLostPackets(ByteArrayBuffer pkt)
+        {
+            if (pkt == null)
+            {
+                return null;
+            }
+
+            return getLostPackets(pkt.getBuffer(), pkt.getOffset(), pkt.getLength());
+        }
+    }
+
+    public static class REMBPacketUtils
+    {
+
+        /**
+         *
+         * @param buf
+         * @return
+         */
+        public static long getBitrate(ByteArrayBuffer buf)
+        {
+            if (buf == null)
+            {
+                return -1;
+            }
+
+            return getBitrate(buf.getBuffer(), buf.getOffset(), buf.getLength());
+        }
+
+        /**
+         *
+         * @param buf
+         * @param off
+         * @param len
+         * @return
+         */
+        private static long getBitrate(byte[] buf, int off, int len)
+        {
+            final int bitrateOffset = RTCPHeader.SIZE + 9;
+            final int bitrateLength = 3;
+
+            int pktLen = RTCPHeaderUtils.getLength(buf, off, len);
+            if (pktLen < bitrateOffset + bitrateLength)
+            {
+                return -1;
+            }
+
+            int exp = (buf[bitrateOffset] & 0xFC) >> 2;
+            int mantissa
+                = ((buf[bitrateOffset] & 0x3) << 16) & 0xFF0000
+                | (buf[bitrateOffset + 1] << 8) & 0x00FF00
+                | buf[bitrateOffset + 2] & 0x0000FF;
+
+            long bitrate = (long) (mantissa * Math.pow(2, exp));
+            return bitrate;
+        }
     }
 }

@@ -496,6 +496,25 @@ public class DePacketizer
         private static final byte X_BIT = (byte) 0x80;
 
         /**
+         *
+         * @param buf
+         * @param off
+         * @param len
+         * @return
+         */
+        public static int temporalLayerIndex(byte[] buf, int off, int len)
+        {
+            if ((buf[off] & X_BIT) == 0 || (buf[off+1] & T_BIT) == 0)
+            {
+                return -1;
+            }
+
+            int sz = getSize(buf, off);
+
+            return (buf[off + sz - 1] & 0xc0) >> 6;
+        }
+
+        /**
          * Returns a simple Payload Descriptor, with PartID = 0, the 'start
          * of partition' bit set according to <tt>startOfPartition</tt>, and
          * all other bits set to 0.

@@ -20,7 +20,6 @@ import java.util.*;
 
 import org.jitsi.impl.neomedia.*;
 import org.jitsi.impl.neomedia.rtcp.*;
-import org.jitsi.impl.neomedia.rtp.*;
 import org.jitsi.service.neomedia.*;
 import org.jitsi.service.neomedia.codec.*;
 import org.jitsi.service.neomedia.format.*;
@@ -136,18 +135,20 @@ public class RetransmissionRequesterImpl
             if (format != null
                 && Constants.RTX.equalsIgnoreCase(format.getEncoding()))
             {
-                long encodingSSRC = pkt.getSSRCAsLong();
-                MediaStreamTrack track
-                    = stream.getRemoteTracks().get(encodingSSRC);
+                RTPEncodingResolver resolver
+                    = MediaStreamExtensions.getRTPEncodingResolver(stream);
 
-                if (track != null)
+                RTPEncoding encoding = resolver.resolveRTPEncoding(pkt);
+
+                if (encoding != null)
                 {
-                    RTPEncoding encoding = track.getEncodingBySSRC(encodingSSRC);
-                    if (encoding != null)
-                    {
-                        ssrc = encoding.getPrimarySSRC();
-                        seq = pkt.getOriginalSequenceNumber();
-                    }
+                    ssrc = encoding.getPrimarySSRC();
+                    seq = pkt.getOriginalSequenceNumber();
+                }
+                else
+                {
+                    logger.warn("encoding_not_found" +
+                        ",stream_hash=" + stream.hashCode());
                 }
             }
 

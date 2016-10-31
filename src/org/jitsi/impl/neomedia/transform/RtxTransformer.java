@@ -95,9 +95,10 @@ public class RtxTransformer
             return null;
         }
 
-        long rtxSsrc = pkt.getSSRCAsLong();
-        MediaStreamTrack track = mediaStream.getRemoteTracks().get(rtxSsrc);
-        if (track == null)
+        RTPEncodingResolver resolver
+            = MediaStreamExtensions.getRTPEncodingResolver(mediaStream);
+
+        if (resolver == null)
         {
             if (logger.isDebugEnabled())
             {
@@ -107,7 +108,7 @@ public class RtxTransformer
             return null;
         }
 
-        RTPEncoding encoding = track.getEncodingBySSRC(rtxSsrc);
+        RTPEncoding encoding = resolver.resolveRTPEncoding(pkt);
         if (encoding == null)
         {
             if (logger.isDebugEnabled())
@@ -146,8 +147,8 @@ public class RtxTransformer
             {
                 logger.warn(
                     "RTX packet received, but no APT is defined. Packet "
-                        + "SSRC " + rtxSsrc + ", associated media SSRC "
-                        + mediaSsrc);
+                        + "SSRC " + pkt.getSSRCAsLong() + ", associated media" +
+                        " SSRC " + mediaSsrc);
             }
         }
 
@@ -207,33 +208,36 @@ public class RtxTransformer
      * Tries to find an SSRC paired with {@code ssrc} in an FID group in one
      * of the mediaStreams from {@link #mediaStream}'s {@code Content}. Returns -1 on
      * failure.
-     * @param ssrc the SSRC for which to find a paired SSRC.
+     * @param pkt the {@code RawPacket} that holds the RTP packet for
+     * which to find a paired SSRC.
      * @return An SSRC paired with {@code ssrc} in an FID group, or -1.
      */
-    private long getPairedSsrc(long ssrc)
+    private long getPairedSsrc(RawPacket pkt)
     {
-        MediaStreamTrack track = null;
+        RTPEncoding encoding = null;
 
         // Find the RTPEncoding that corresponds to this SSRC.
         StreamRTPManager receiveRTPManager = mediaStream.getRTPTranslator()
-            .findStreamRTPManagerByReceiveSSRC((int) ssrc);
+            .findStreamRTPManagerByReceiveSSRC(pkt.getSSRC());
         if (receiveRTPManager != null)
         {
             MediaStream receiveStream = receiveRTPManager.getMediaStream();
             if (receiveStream != null)
             {
-                track = receiveStream.getRemoteTracks().get(ssrc);
+                RTPEncodingResolver resolver =
+                    MediaStreamExtensions.getRTPEncodingResolver(receiveStream);
+                if (resolver != null)
+                {
+                    encoding = resolver.resolveRTPEncoding(pkt);
+                }
             }
         }
 
-        if (track == null)
-        {
-            return -1;
-        }
-
-        RTPEncoding encoding = track.getEncodingBySSRC(ssrc);
         if (encoding == null)
         {
+            logger.warn("encoding_not_found"
+                + ",stream_hash=" + mediaStream.hashCode()
+                + " ssrc=" + pkt.getSSRCAsLong());
             return -1;
         }
 
@@ -281,7 +285,7 @@ public class RtxTransformer
 
         if (rtxPt != null)
         {
-            long rtxSsrc = getPairedSsrc(pkt.getSSRCAsLong());
+            long rtxSsrc = getPairedSsrc(pkt);
 
             if (rtxSsrc == -1)
             {

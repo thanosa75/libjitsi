@@ -25,7 +25,6 @@ import net.sf.fmj.media.rtp.RTPHeader;
 
 import org.ice4j.util.*;
 import org.jitsi.impl.neomedia.*;
-import org.jitsi.impl.neomedia.rtcp.*;
 import org.jitsi.impl.neomedia.rtp.*;
 import org.jitsi.service.libjitsi.*;
 import org.jitsi.service.neomedia.*;
@@ -254,10 +253,14 @@ class OutputDataStreamImpl
                 write
                     = translator.willWrite(
                         /* source */ exclusion,
-                    buf, off, len,
+                    new RawPacket(buf, off, len),
                         /* destination */ streamRTPManager,
                     _data);
             }
+
+            // Prevent frame corruption.
+            write = streamRTPManager.willWrite(
+                /* src */ exclusion, buf, off, len, _data, write);
 
             // Hide the gaps in the sequence numbers and in the timestamps (
             // because of dropping packets here).
@@ -817,17 +820,17 @@ class OutputDataStreamImpl
             // SRs being bundled in the same compound packet, and we're only
             // interested in SRs.
 
-            int pktLen = RTCPHeaderUtils.getLength(buf, offset, length);
+            int pktLen = RawPacket.RTCPHeaderUtils.getLength(buf, offset, length);
             if (pktLen < RTCPHeader.SIZE + RTCPSenderInfo.SIZE)
             {
                 return modified;
             }
 
-            int pt = RTCPHeaderUtils.getPacketType(buf, offset, pktLen);
+            int pt = RawPacket.RTCPHeaderUtils.getPacketType(buf, offset, pktLen);
             if (pt == RTCPPacket.SR)
             {
                 long ssrc
-                    = RTCPHeaderUtils.getSenderSSRC(buf, offset, pktLen);
+                    = RawPacket.RTCPHeaderUtils.getSenderSSRC(buf, offset, pktLen);
 
                 // If an SR is received, then we have media.
                 ResumableStreamRewriter rewriter = streamRTPManager
@@ -838,15 +841,15 @@ class OutputDataStreamImpl
                     if (logger.isDebugEnabled())
                     {
                         long rtptimestamp
-                            = RTCPSenderInfoUtils.getTimestamp(
+                            = RawPacket.RTCPSenderInfoUtils.getTimestamp(
                             buf, offset + RTCPHeader.SIZE,
                             pktLen - RTCPHeader.SIZE);
                         long ntptimestampmsw
-                            = RTCPSenderInfoUtils.getNtpTimestampMSW(
+                            = RawPacket.RTCPSenderInfoUtils.getNtpTimestampMSW(
                             buf, offset + RTCPHeader.SIZE,
                             pktLen - RTCPHeader.SIZE);
                         long ntptimestamplsw
-                            = RTCPSenderInfoUtils.getNtpTimestampLSW(
+                            = RawPacket.RTCPSenderInfoUtils.getNtpTimestampLSW(
                             buf, offset + RTCPHeader.SIZE,
                             pktLen - RTCPHeader.SIZE);
 
@@ -879,15 +882,15 @@ class OutputDataStreamImpl
                         if (logger.isDebugEnabled())
                         {
                             long rtptimestamp
-                                = RTCPSenderInfoUtils.getTimestamp(
+                                = RawPacket.RTCPSenderInfoUtils.getTimestamp(
                                 buf, offset + RTCPHeader.SIZE,
                                 pktLen - RTCPHeader.SIZE);
                             long ntptimestampmsw
-                                = RTCPSenderInfoUtils.getNtpTimestampMSW(
+                                = RawPacket.RTCPSenderInfoUtils.getNtpTimestampMSW(
                                 buf, offset + RTCPHeader.SIZE,
                                 pktLen - RTCPHeader.SIZE);
                             long ntptimestamplsw
-                                = RTCPSenderInfoUtils.getNtpTimestampLSW(
+                                = RawPacket.RTCPSenderInfoUtils.getNtpTimestampLSW(
                                 buf, offset + RTCPHeader.SIZE,
                                 pktLen - RTCPHeader.SIZE);
 

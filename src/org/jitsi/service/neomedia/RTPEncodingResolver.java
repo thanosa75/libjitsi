@@ -16,17 +16,21 @@
 package org.jitsi.service.neomedia;
 
 /**
- * Represents a collection of {@code RTPEncoding}s.
+ * Finds the {@code RTPEncoding} that corresponds to RTP packets.
  *
  * @author George Politis
  */
-public interface MediaStreamTrack<T extends RTPEncoding>
+public interface RTPEncodingResolver
 {
     /**
-     * Returns an ordered array
-     * @return
+     * Finds the {@code RTPEncoding} that matches {@code ByteArrayBuffer} passed
+     * in as a parameter.
+     *
+     * @param baf the {@code ByteArrayBuffer} of the {@code RTPEncoding}
+     * to match.
+     *
+     * @return the {@code RTPEncoding} that matches the pkt passed in as
+     * a parameter, or null if there is no matching {@code RTPEncoding}.
      */
-    T[] getRTPEncodings();
-
-    boolean isMultiStream();
+    RTPEncoding resolveRTPEncoding(ByteArrayBuffer baf);
 }

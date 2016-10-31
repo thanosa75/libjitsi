@@ -152,7 +152,7 @@ public class RTCPFeedbackMessageSender
      * @return <tt>true</tt> if a FIR command was sent; otherwise,
      * <tt>false</tt>
      */
-    public boolean sendFIR(int[] mediaSenderSSRCs)
+    public boolean sendFIR(int ... mediaSenderSSRCs)
     {
         if (mediaSenderSSRCs == null || mediaSenderSSRCs.length == 0)
         {
@@ -266,8 +266,8 @@ public class RTCPFeedbackMessageSender
                 return;
             }
 
-            if(!streamRTPManager
-                .streamRTPManager.getMediaStream().isKeyFrame(buf, off, len))
+            if(!streamRTPManager.streamRTPManager.getMediaStream()
+                .isKeyFrame(new RawPacket(buf, off, len)))
             {
                 return;
             }

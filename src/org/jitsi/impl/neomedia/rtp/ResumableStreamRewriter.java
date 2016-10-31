@@ -17,7 +17,6 @@ package org.jitsi.impl.neomedia.rtp;
 
 import net.sf.fmj.media.rtp.*;
 import org.jitsi.impl.neomedia.*;
-import org.jitsi.impl.neomedia.rtcp.*;
 import org.jitsi.util.*;
 
 /**
@@ -247,7 +246,7 @@ public class ResumableStreamRewriter
             return false;
         }
 
-        long ts = RTCPSenderInfoUtils.getTimestamp(
+        long ts = RawPacket.RTCPSenderInfoUtils.getTimestamp(
             buf, off + RTCPHeader.SIZE, len - RTCPHeader.SIZE);
 
         if (ts == -1)
@@ -259,7 +258,7 @@ public class ResumableStreamRewriter
             ? (ts - timestampDelta) & 0xffffffffL
             : (ts + timestampDelta) & 0xffffffffL;
 
-        boolean ret = RTCPSenderInfoUtils.setTimestamp(
+        boolean ret = RawPacket.RTCPSenderInfoUtils.setTimestamp(
             buf, off + RTCPHeader.SIZE, len - RTCPHeader.SIZE, newTs);
 
         return ret;

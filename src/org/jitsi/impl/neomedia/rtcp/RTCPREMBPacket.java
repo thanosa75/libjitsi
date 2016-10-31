@@ -252,46 +252,4 @@ public class RTCPREMBPacket extends RTCPFBPacket
         return (long) (mantissa * Math.pow(2, exp));
     }
 
-    /**
-     *
-     * @param buf
-     * @return
-     */
-    public static long getBitrate(RawPacket buf)
-    {
-        if (buf == null)
-        {
-            return -1;
-        }
-
-        return getBitrate(buf.getBuffer(), buf.getOffset(), buf.getLength());
-    }
-
-    /**
-     *
-     * @param buf
-     * @param off
-     * @param len
-     * @return
-     */
-    private static long getBitrate(byte[] buf, int off, int len)
-    {
-        final int bitrateOffset = RTCPHeader.SIZE + 9;
-        final int bitrateLength = 3;
-
-        int pktLen = RTCPHeaderUtils.getLength(buf, off, len);
-        if (pktLen < bitrateOffset + bitrateLength)
-        {
-            return -1;
-        }
-
-        int exp = (buf[bitrateOffset] & 0xFC) >> 2;
-        int mantissa
-            = ((buf[bitrateOffset] & 0x3) << 16) & 0xFF0000
-            | (buf[bitrateOffset + 1] << 8) & 0x00FF00
-            | buf[bitrateOffset + 2] & 0x0000FF;
-
-        long bitrate = (long) (mantissa * Math.pow(2, exp));
-        return bitrate;
-    }
 }

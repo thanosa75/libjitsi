@@ -255,8 +255,8 @@ public class DebugTransformEngine implements TransformEngine
             if (data && RTPPacketPredicate.INSTANCE.test(pkt))
             {
                 RemoteClock clock = mediaStream
-                    .getStreamRTPManager().findRemoteClock(
-                        pkt.getSSRCAsLong());
+                    .getStreamRTPManager().findRemoteClocks(
+                        pkt.getSSRCAsLong())[0];
 
                 long millis = (clock != null)
                     ? clock.rtpTimestamp2remoteSystemTimeMs(pkt.getTimestamp())
@@ -292,25 +292,25 @@ public class DebugTransformEngine implements TransformEngine
 
                 // Check RTCP packet validity. This makes sure that
                 // pktLen > 0 so this loop will eventually terminate.
-                int pktLen = RTCPHeaderUtils.getLength(buf, offset, length);
+                int pktLen = RawPacket.RTCPHeaderUtils.getLength(buf, offset, length);
                 if (pktLen >= RTCPHeader.SIZE + RTCPSenderInfo.SIZE)
                 {
-                    int pt = RTCPHeaderUtils.getPacketType(buf, offset, pktLen);
+                    int pt = RawPacket.RTCPHeaderUtils.getPacketType(buf, offset, pktLen);
                     if (pt == RTCPPacket.SR)
                     {
-                        long ssrc = RTCPHeaderUtils.getSenderSSRC(
+                        long ssrc = RawPacket.RTCPHeaderUtils.getSenderSSRC(
                             buf, offset, pktLen);
 
                         long rtptimestamp
-                            = RTCPSenderInfoUtils.getTimestamp(
+                            = RawPacket.RTCPSenderInfoUtils.getTimestamp(
                             buf, offset + RTCPHeader.SIZE,
                             pktLen - RTCPHeader.SIZE);
                         long ntptimestampmsw
-                            = RTCPSenderInfoUtils.getNtpTimestampMSW(
+                            = RawPacket.RTCPSenderInfoUtils.getNtpTimestampMSW(
                             buf, offset + RTCPHeader.SIZE,
                             pktLen - RTCPHeader.SIZE);
                         long ntptimestamplsw
-                            = RTCPSenderInfoUtils.getNtpTimestampLSW(
+                            = RawPacket.RTCPSenderInfoUtils.getNtpTimestampLSW(
                             buf, offset + RTCPHeader.SIZE,
                             pktLen - RTCPHeader.SIZE);
 
@@ -319,8 +319,8 @@ public class DebugTransformEngine implements TransformEngine
                                 ntptimestampmsw, ntptimestamplsw));
 
                         RemoteClock clock = mediaStream
-                            .getStreamRTPManager().findRemoteClock(
-                                ssrc);
+                            .getStreamRTPManager().findRemoteClocks(
+                                ssrc)[0];
 
                         long millis = (clock != null)
                             ? clock.rtpTimestamp2remoteSystemTimeMs(rtptimestamp)

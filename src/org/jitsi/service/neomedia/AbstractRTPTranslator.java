@@ -144,12 +144,8 @@ public abstract class AbstractRTPTranslator
      * <tt>source</tt> will be written into a <tt>destination</tt>.
      *
      * @param source the source of <tt>buffer</tt>
-     * @param buffer the bytes from <tt>source</tt> which are to be written into
+     * @param baf the bytes from <tt>source</tt> which are to be written into
      * <tt>destination</tt>
-     * @param offset the offset in <tt>buffer</tt> at which the bytes to be
-     * written begin
-     * @param length the number of bytes in <tt>buffer</tt> beginning at
-     * <tt>offset</tt> which represent the bytes to be written
      * @param destination the destination into which <tt>buffer</tt> is to be
      * written
      * @param data <tt>true</tt> for data/RTP or <tt>false</tt> for control/RTCP
@@ -158,7 +154,7 @@ public abstract class AbstractRTPTranslator
      */
     protected boolean willWrite(
             MediaStream source,
-            byte[] buffer, int offset, int length,
+            ByteArrayBuffer baf,
             MediaStream destination,
             boolean data)
     {
@@ -179,9 +175,7 @@ public abstract class AbstractRTPTranslator
         if (writeFilter != null)
         {
             accept
-                = willWrite(
-                        writeFilter,
-                        source, buffer, offset, length, destination, data);
+                = willWrite(writeFilter, source, baf, destination, data);
         }
         else if (writeFilters != null)
         {
@@ -190,7 +184,7 @@ public abstract class AbstractRTPTranslator
                 accept
                     = willWrite(
                             wf,
-                            source, buffer, offset, length, destination, data);
+                            source, baf, destination, data);
                 if (!accept)
                     break;
             }
@@ -203,12 +197,8 @@ public abstract class AbstractRTPTranslator
      * Invokes a specific <tt>WriteFilter</tt>.
      *
      * @param source the source of <tt>buffer</tt>
-     * @param buffer the bytes from <tt>source</tt> which are to be written into
+     * @param baf the bytes from <tt>source</tt> which are to be written into
      * <tt>destination</tt>
-     * @param offset the offset in <tt>buffer</tt> at which the bytes to be
-     * written begin
-     * @param length the number of bytes in <tt>buffer</tt> beginning at
-     * <tt>offset</tt> which represent the bytes to be written
      * @param destination the destination into which <tt>buffer</tt> is to be
      * written
      * @param data <tt>true</tt> for data/RTP or <tt>false</tt> for control/RTCP
@@ -218,7 +208,7 @@ public abstract class AbstractRTPTranslator
     protected boolean willWrite(
             WriteFilter writeFilter,
             MediaStream source,
-            byte[] buffer, int offset, int length,
+            ByteArrayBuffer baf,
             MediaStream destination,
             boolean data)
     {
@@ -227,11 +217,7 @@ public abstract class AbstractRTPTranslator
         try
         {
             accept
-                = writeFilter.accept(
-                        source,
-                        buffer, offset, length,
-                        destination,
-                        data);
+                = writeFilter.accept(source, baf, destination, data);
         }
         catch (Throwable t)
         {

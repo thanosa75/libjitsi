@@ -149,5 +149,5 @@ public interface VideoMediaStream
      * Creates an instance of {@link BandwidthEstimator} for this
      * {@link MediaStream} if one doesn't already exist. Returns the instance.
      */
-    public BandwidthEstimator getOrCreateBandwidthEstimator();
+    public BandwidthEstimator getBandwidthEstimator();
 }

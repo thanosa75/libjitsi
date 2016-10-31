@@ -17,7 +17,6 @@ package org.jitsi.impl.neomedia.transform;
 
 import net.sf.fmj.media.rtp.*;
 import org.jitsi.impl.neomedia.*;
-import org.jitsi.impl.neomedia.rtcp.*;
 import org.jitsi.impl.neomedia.rtp.*;
 import org.jitsi.service.neomedia.*;
 import org.jitsi.util.*;
@@ -138,17 +137,17 @@ public class DiscardTransformEngine
             // SRs being bundled in the same compound packet, and we're only
             // interested in SRs.
 
-            int pktLen = RTCPHeaderUtils.getLength(buf, offset, length);
+            int pktLen = RawPacket.RTCPHeaderUtils.getLength(buf, offset, length);
             if (pktLen < RTCPHeader.SIZE + RTCPSenderInfo.SIZE)
             {
                 return pkt;
             }
 
-            int pt = RTCPHeaderUtils.getPacketType(buf, offset, pktLen);
+            int pt = RawPacket.RTCPHeaderUtils.getPacketType(buf, offset, pktLen);
             if (pt == RTCPPacket.SR)
             {
                 long ssrc
-                    = RTCPHeaderUtils.getSenderSSRC(buf, offset, pktLen);
+                    = RawPacket.RTCPHeaderUtils.getSenderSSRC(buf, offset, pktLen);
 
                 ResumableStreamRewriter rewriter;
                 synchronized (ssrcToRewriter)

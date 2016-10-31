@@ -240,12 +240,6 @@ public class MediaStreamImpl
     private final Vector<Long> remoteSourceIDs = new Vector<>(1, 1);
 
     /**
-     * The {@code MediaStreamTracks} of this {@code MediaStream}.
-     */
-    private Map<Long, MediaStreamTrack> remoteTracks
-        = Collections.synchronizedMap(new TreeMap<Long, MediaStreamTrack>());
-
-    /**
      * The <tt>RTPConnector</tt> through which this instance sends and receives
      * RTP and RTCP traffic. The instance is a <tt>TransformConnector</tt> in
      * order to also enable packet transformations.
@@ -999,11 +993,11 @@ public class MediaStreamImpl
     }
 
     /**
-     * Creates the {@link SsrcRewritingEngine} for this
+     * Creates the {@link MultiStreamRewritingEngine} for this
      * {@code MediaStream}.
-     * @return the created {@link SsrcRewritingEngine}.
+     * @return the created {@link MultiStreamRewritingEngine}.
      */
-    protected SsrcRewritingEngine getSsrcRewritingEngine()
+    protected MultiStreamRewritingEngine getMultiStreamRewritingEngine()
     {
         return null;
     }
@@ -1050,9 +1044,10 @@ public class MediaStreamImpl
             engineChain.add(redTransformEngine);
 
         // SSRC rewriting
-        SsrcRewritingEngine ssrcRewritingEngine = getSsrcRewritingEngine();
-        if (ssrcRewritingEngine != null)
-            engineChain.add(ssrcRewritingEngine);
+        MultiStreamRewritingEngine
+            multiStreamRewritingEngine = getMultiStreamRewritingEngine();
+        if (multiStreamRewritingEngine != null)
+            engineChain.add(multiStreamRewritingEngine);
 
         // Deduplicate incoming RTP packets. SRTP takes care of this for raw
         // RTP packets, this transformer runs after the deRTX step.
@@ -1468,6 +1463,7 @@ public class MediaStreamImpl
      */
     public byte getDynamicRTPPayloadType(String encoding)
     {
+        // XXX(gp) String encoding -> String ... encodings
         synchronized (dynamicRTPPayloadTypes)
         {
             for (Map.Entry<Byte, MediaFormat> dynamicRTPPayloadType
@@ -1479,7 +1475,7 @@ public class MediaStreamImpl
                     return dynamicRTPPayloadType.getKey().byteValue();
                 }
             }
-            return -1;
+            return -1; /* FIXME(gp) -1 is a valid byte value. */
         }
     }
 
@@ -1873,15 +1869,6 @@ public class MediaStreamImpl
          * prevent ConcurrentModificationException.
          */
         return Collections.unmodifiableList(remoteSourceIDs);
-    }
-
-    /**
-     * {@inheritDoc}
-     */
-    @Override
-    public Map<Long, MediaStreamTrack> getRemoteTracks()
-    {
-        return remoteTracks;
     }
 
     /**
@@ -3636,93 +3623,91 @@ public class MediaStreamImpl
     }
 
     /**
+     * {@inheritDoc}
+     */
+    @Override
+    public int getTemporalLayer(ByteArrayBuffer pkt)
+    {
+        if (pkt == null)
+        {
+            return -1;
+        }
+
+        byte redPT = getDynamicRTPPayloadType(Constants.RED)
+            , vp8PT = getDynamicRTPPayloadType(Constants.VP8);
+
+        int payloadOff, payloadLen, payloadType;
+
+        if ((redPT & 0xff) == RawPacket.getPayloadType(pkt))
+        {
+            REDBlock block = REDBlockIterator.getPrimaryBlock(pkt);
+
+            payloadOff = block.getOffset();
+            payloadLen = block.getLength();
+            payloadType = block.getPayloadType();
+        }
+        else
+        {
+            payloadOff = RawPacket.getPayloadOffset(pkt);
+            payloadLen = RawPacket.getPayloadLength(pkt);
+            payloadType = RawPacket.getPayloadType(pkt);
+        }
+
+        if (payloadType == (vp8PT & 0xff))
+        {
+            return org.jitsi.impl
+                .neomedia.codec.video.vp8.DePacketizer.VP8PayloadDescriptor
+                .temporalLayerIndex(pkt.getBuffer(), payloadOff, payloadLen);
+        }
+        else
+        {
+            return -1;
+        }
+    }
+
+    /**
     * {@inheritDoc}
     */
-    public boolean isKeyFrame(byte[] buf, int off, int len)
+    @Override
+    public boolean isKeyFrame(ByteArrayBuffer baf)
     {
-        if (buf == null || buf.length < off + len
-            || len < net.sf.fmj.media.rtp.RTPHeader.SIZE)
+        if (baf == null || baf.getLength() < net.sf.fmj.media.rtp.RTPHeader.SIZE)
         {
             return false;
         }
 
-        Byte redPT = null, vp8PT = null, h264PT = null;
-        for (Map.Entry<Byte, MediaFormat> entry :
-            getDynamicRTPPayloadTypes().entrySet())
-        {
-            String encoding = entry.getValue().getEncoding();
-            Byte payloadType = entry.getKey();
+        byte redPT = getDynamicRTPPayloadType(Constants.RED),
+            vp8PT = getDynamicRTPPayloadType(Constants.VP8),
+            h264PT = getDynamicRTPPayloadType(Constants.H264);
 
-            if (Constants.RED.equalsIgnoreCase(encoding))
-            {
-                redPT = payloadType;
-            }
-            else if (Constants.VP8.equalsIgnoreCase(encoding))
-            {
-                vp8PT = payloadType;
-            }
-            else if (Constants.H264.equalsIgnoreCase(encoding))
-            {
-                h264PT = payloadType;
-            }
+        int payloadOff, payloadLen, payloadType;
+        if ((redPT & 0xff) == RawPacket.getPayloadType(baf))
+        {
+            REDBlock block = REDBlockIterator.getPrimaryBlock(baf);
+
+            payloadOff = block.getOffset();
+            payloadLen = block.getLength();
+            payloadType = block.getPayloadType();
+        }
+        else
+        {
+            payloadOff = RawPacket.getPayloadOffset(baf);
+            payloadLen = RawPacket.getPayloadLength(baf);
+            payloadType = RawPacket.getPayloadType(baf);
         }
 
-        int payloadOff, payloadLen;
-        byte payloadType;
-
-        try {
-          // XXX this will not work correctly when RTX gets enabled!
-            if (redPT != null
-                && redPT == RawPacket.getPayloadType(buf, off, len))
-            {
-                // XXX There's RawPacket#getPayloadLength() but the implementation
-                // includes pkt.paddingSize at the time of this writing and
-                // we do not know whether that's going to stay that way
-                REDBlock block = REDBlockIterator
-                    .getPrimaryBlock(buf,
-                        RawPacket.getPayloadOffset(buf, off, len),
-                        RawPacket.getPayloadLength(buf, off, len)
-                            - RawPacket.getPaddingSize(buf, off, len)
-                            - RawPacket.getHeaderLength(buf, off, len));
-
-                payloadOff = block.getOffset();
-                payloadLen = block.getLength();
-                payloadType = block.getPayloadType();
-            }
-            else
-            {
-                // XXX There's RawPacket#getPayloadLength() but the implementation
-                // includes pkt.paddingSize at the time of this writing and
-                // we do not know whether that's going to stay that way
-                payloadOff = RawPacket.getPayloadOffset(buf, off, len);
-                payloadLen = RawPacket.getPayloadLength(buf, off, len)
-                    - RawPacket.getPayloadOffset(buf, off, len)
-                    - RawPacket.getHeaderLength(buf, off, len);
-                payloadType
-                    = RawPacket.getPayloadType(buf, off, len);
-            }
-            if (vp8PT != null && payloadType == vp8PT)
-            {
-                return org.jitsi.impl.neomedia.codec.video.vp8.DePacketizer
-                    .isKeyFrame(buf, payloadOff, payloadLen);
-            } else if (h264PT != null && payloadType == h264PT)
-            {
-                return org.jitsi.impl.neomedia.codec.video.h264.DePacketizer
-                    .isKeyFrame(buf, payloadOff, len);
-            }
-            else
-            {
-                return false;
-            }
-        }
-        catch (ArrayIndexOutOfBoundsException e)
+        if (payloadType == (vp8PT & 0xff))
         {
-            // While ideally we should check the bounds everywhere and not
-            // attempt to access the packet's buffer at invalid indexes, there
-            // are too many places where it could inadvertently happen. It's
-            // safer to return a default value of 'false' from this utility
-            // method than to risk killing a thread which doesn't expect this.
-            logger.warn("Caught an exception while checking for keyframe:", e);
+            return org.jitsi.impl.neomedia.codec.video.vp8.DePacketizer
+                .isKeyFrame(baf.getBuffer(), payloadOff, payloadLen);
+        }
+        else if (payloadType == (h264PT & 0xff))
+        {
+            return org.jitsi.impl.neomedia.codec.video.h264.DePacketizer
+                .isKeyFrame(baf.getBuffer(), payloadOff, payloadLen);
+        }
+        else
+        {
             return false;
         }
     }

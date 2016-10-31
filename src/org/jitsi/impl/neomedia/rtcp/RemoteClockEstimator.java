@@ -18,6 +18,7 @@ package org.jitsi.impl.neomedia.rtcp;
 import java.util.*;
 import java.util.concurrent.*;
 import net.sf.fmj.media.rtp.*;
+import org.jitsi.impl.neomedia.*;
 import org.jitsi.impl.neomedia.rtp.*;
 import org.jitsi.service.neomedia.*;
 import org.jitsi.util.*;
@@ -80,7 +81,7 @@ public class RemoteClockEstimator
     public void update(byte[] buf, int off, int len)
     {
         long ssrc
-            = RTCPHeaderUtils.getSenderSSRC(buf, off, len);
+            = RawPacket.RTCPHeaderUtils.getSenderSSRC(buf, off, len);
 
         if (ssrc == -1)
         {
@@ -90,7 +91,7 @@ public class RemoteClockEstimator
             return;
         }
 
-        int pktLen = RTCPHeaderUtils.getLength(buf, off, len);
+        int pktLen = RawPacket.RTCPHeaderUtils.getLength(buf, off, len);
         if (pktLen < RTCPHeader.SIZE + RTCPSenderInfo.SIZE)
         {
             logger.warn("Failed to update the remote clock. The RTCP SR length"
@@ -99,11 +100,11 @@ public class RemoteClockEstimator
             return;
         }
 
-        long rtptimestamp = RTCPSenderInfoUtils.getTimestamp(
+        long rtptimestamp = RawPacket.RTCPSenderInfoUtils.getTimestamp(
             buf, off + RTCPHeader.SIZE, pktLen - RTCPHeader.SIZE);
-        long ntptimestampmsw = RTCPSenderInfoUtils.getNtpTimestampMSW(
+        long ntptimestampmsw = RawPacket.RTCPSenderInfoUtils.getNtpTimestampMSW(
             buf, off + RTCPHeader.SIZE, pktLen - RTCPHeader.SIZE);
-        long ntptimestamplsw = RTCPSenderInfoUtils.getNtpTimestampLSW(
+        long ntptimestamplsw = RawPacket.RTCPSenderInfoUtils.getNtpTimestampLSW(
             buf, off + RTCPHeader.SIZE, pktLen - RTCPHeader.SIZE);
 
         long systemTimeMs = TimeUtils.getTime(
@@ -113,6 +114,11 @@ public class RemoteClockEstimator
         int frequencyHz;
 
         RemoteClock oldClock = remoteClocks.get(ssrc);
+        if (oldClock != null)
+        {
+            return;
+        }
+
         if (oldClock != null)
         {
             // Calculate the clock frequency/rate.

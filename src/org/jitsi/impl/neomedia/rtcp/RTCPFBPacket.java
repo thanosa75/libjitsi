@@ -20,6 +20,7 @@ import java.io.*;
 import net.sf.fmj.media.rtp.*;
 
 import org.jitsi.impl.neomedia.*;
+import org.jitsi.service.neomedia.*;
 
 /**
  * Created by gp on 6/27/14.
@@ -159,7 +160,7 @@ public class RTCPFBPacket
      */
     public static long getSourceSSRC(byte[] buf, int off, int len)
     {
-        int pktLen = RTCPHeaderUtils.getLength(buf, off, len);
+        int pktLen = RawPacket.RTCPHeaderUtils.getLength(buf, off, len);
         if (pktLen < RTCPHeader.SIZE + 4)
         {
             return -1;
@@ -176,7 +177,7 @@ public class RTCPFBPacket
      * @return the source SSRC of an RTCP FB packet, or -1 if this is an invalid
      * RTCP FB packet.
      */
-    public static long getSourceSSRC(RawPacket pkt)
+    public static long getSourceSSRC(ByteArrayBuffer pkt)
     {
         if (pkt == null)
         {

@@ -17,6 +17,7 @@ package org.jitsi.impl.neomedia.rtcp;
 
 import net.sf.fmj.media.rtp.*;
 import org.jitsi.impl.neomedia.*;
+import org.jitsi.service.neomedia.*;
 
 import java.util.*;
 
@@ -26,7 +27,7 @@ import java.util.*;
  * @author George Politis
  */
 public class RTCPIterator
-    implements Iterator<RawPacket>
+    implements Iterator<ByteArrayBuffer>
 {
     /**
      * The {@code RawPacket} that holds the RTCP packet to iterate.
@@ -51,13 +52,27 @@ public class RTCPIterator
     /**
      * Ctor.
      *
-     * @param pkt The {@code RawPacket} that holds the RTCP packet to iterate.
+     * @param buf
+     * @param off
+     * @param len
      */
-    public RTCPIterator(RawPacket pkt)
+    public RTCPIterator(byte[] buf, int off, int len)
     {
-        this.buf = pkt.getBuffer();
-        this.off = pkt.getOffset();
-        this.len = pkt.getLength();
+        this.buf = buf;
+        this.off = off;
+        this.len = len;
+    }
+
+    /**
+     * Ctor.
+     *
+     * @param baf The {@code ByteArrayBuffer} that holds the RTCP packet to iterate.
+     */
+    public RTCPIterator(ByteArrayBuffer baf)
+    {
+        this.buf = baf.getBuffer();
+        this.off = baf.getOffset();
+        this.len = baf.getLength();
     }
 
     /**
@@ -66,16 +81,16 @@ public class RTCPIterator
     @Override
     public boolean hasNext()
     {
-        return RTCPHeaderUtils.getLength(buf, off, len) >= RTCPHeader.SIZE;
+        return RawPacket.RTCPHeaderUtils.getLength(buf, off, len) >= RTCPHeader.SIZE;
     }
 
     /**
      * {@inheritDoc}
      */
     @Override
-    public RawPacket next()
+    public ByteArrayBuffer next()
     {
-        int pktLen = RTCPHeaderUtils.getLength(buf, off, len);
+        int pktLen = RawPacket.RTCPHeaderUtils.getLength(buf, off, len);
         if (pktLen < RTCPHeader.SIZE)
         {
             throw new IllegalStateException();

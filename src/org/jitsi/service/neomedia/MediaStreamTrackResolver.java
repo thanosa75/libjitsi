@@ -16,17 +16,17 @@
 package org.jitsi.service.neomedia;
 
 /**
- * Represents a collection of {@code RTPEncoding}s.
- *
  * @author George Politis
  */
-public interface MediaStreamTrack<T extends RTPEncoding>
+public interface MediaStreamTrackResolver
 {
     /**
-     * Returns an ordered array
-     * @return
+     * Resolves the {@code ByteArrayBuffer} passed in as a parameter into a
+     * {@code MediaStreamTrack}.
+     *
+     * @param baf the {@code ByteArrayBuffer} to resolve into a
+     * {@code MediaStreamTrack}.
+     * @return the {@code MediaStreamTrack} that corresponds to pkt.
      */
-    T[] getRTPEncodings();
-
-    boolean isMultiStream();
+    MediaStreamTrack resolveMediaStreamTrack(ByteArrayBuffer baf);
 }

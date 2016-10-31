@@ -16,17 +16,16 @@
 package org.jitsi.service.neomedia;
 
 /**
- * Represents a collection of {@code RTPEncoding}s.
- *
  * @author George Politis
  */
-public interface MediaStreamTrack<T extends RTPEncoding>
+public interface BitrateController
 {
     /**
-     * Returns an ordered array
+     * Gets the minimum bitrate required in order to stream without scaling
+     * down or suspending streams.
+     *
+     * @param nowMs
      * @return
      */
-    T[] getRTPEncodings();
-
-    boolean isMultiStream();
+    long getMinimumBitrate(long nowMs);
 }

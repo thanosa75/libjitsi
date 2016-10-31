@@ -454,7 +454,8 @@ public class VideoMediaStreamImpl
      * The {@code BandwidthEstimator} which estimates the available bandwidth
      * from this endpoint to the remote peer.
      */
-    private BandwidthEstimatorImpl bandwidthEstimator;
+    private BandwidthEstimatorImpl bandwidthEstimator
+        = new BandwidthEstimatorImpl(this);
 
     /**
      * The RTCP termination strategy for this {@code MediaStream}.
@@ -466,8 +467,8 @@ public class VideoMediaStreamImpl
      * (which is extremely lightweight) but it needs to be initialized so that
      * it can work.
      */
-    private final SsrcRewritingEngine ssrcRewritingEngine
-        = new SsrcRewritingEngine(this);
+    private final MultiStreamRewritingEngine multiStreamRewritingEngine
+        = new MultiStreamRewritingEngine(this);
 
     /**
      * The transformer that handles RTX.
@@ -560,11 +561,6 @@ public class VideoMediaStreamImpl
             {
                 recurringRunnableExecutor.deRegisterRecurringRunnable(
                         (RecurringRunnable) remoteBitrateEstimator);
-            }
-            if (bandwidthEstimator != null)
-            {
-                recurringRunnableExecutor.deRegisterRecurringRunnable(
-                        bandwidthEstimator);
             }
         }
     }
@@ -1352,9 +1348,9 @@ public class VideoMediaStreamImpl
      * {@inheritDoc}
      */
     @Override
-    protected SsrcRewritingEngine getSsrcRewritingEngine()
+    protected MultiStreamRewritingEngine getMultiStreamRewritingEngine()
     {
-        return ssrcRewritingEngine;
+        return multiStreamRewritingEngine;
     }
 
     /**
@@ -1370,15 +1366,8 @@ public class VideoMediaStreamImpl
      * {@inheritDoc}
      */
     @Override
-    public BandwidthEstimator getOrCreateBandwidthEstimator()
+    public BandwidthEstimator getBandwidthEstimator()
     {
-        if (bandwidthEstimator == null)
-        {
-            bandwidthEstimator = new BandwidthEstimatorImpl(this);
-            recurringRunnableExecutor.registerRecurringRunnable(
-                    bandwidthEstimator);
-            logger.info("Creating a BandwidthEstimator for stream " + this);
-        }
         return bandwidthEstimator;
     }
 

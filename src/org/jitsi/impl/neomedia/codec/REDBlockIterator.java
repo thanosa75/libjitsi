@@ -16,6 +16,8 @@
 package org.jitsi.impl.neomedia.codec;
 
 import java.util.*;
+
+import org.jitsi.service.neomedia.*;
 import org.jitsi.util.*;
 import org.jitsi.util.function.*;
 
@@ -110,6 +112,22 @@ public class REDBlockIterator
     /**
      * Gets the first RED block in the RED payload.
      *
+     * @param baf the byte buffer that contains the RED payload.
+     * @return the primary RED block if it exists, null otherwise.
+     */
+    public static REDBlock getPrimaryBlock(ByteArrayBuffer baf)
+    {
+        if (baf == null)
+        {
+            return null;
+        }
+
+        return getPrimaryBlock(baf.getBuffer(), baf.getOffset(), baf.getLength());
+    }
+
+    /**
+     * Gets the first RED block in the RED payload.
+     *
      * @param buffer the byte buffer that contains the RED payload.
      * @param offset the offset in the buffer where the RED payload begins.
      * @param length the length of the RED payload.
@@ -161,7 +179,7 @@ public class REDBlockIterator
                 return null;
             }
 
-            return new REDBlock(blockOff, blockLen, blockPT);
+            return new REDBlock(buffer, blockOff, blockLen, blockPT);
         }
     }
 
@@ -261,7 +279,7 @@ public class REDBlockIterator
             offNextBlockPayload = -1;
         }
 
-        return new REDBlock(offNextBlockPayload, blockLen, blockPT);
+        return new REDBlock(buffer, offNextBlockPayload, blockLen, blockPT);
     }
 
     @Override

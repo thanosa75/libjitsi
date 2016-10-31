@@ -18,7 +18,6 @@ package org.jitsi.impl.neomedia.rtp.sendsidebandwidthestimation;
 import net.sf.fmj.media.rtp.*;
 import org.jitsi.service.neomedia.*;
 import org.jitsi.service.neomedia.rtp.*;
-import org.jitsi.util.concurrent.*;
 
 import java.util.*;
 import java.util.concurrent.*;
@@ -30,17 +29,12 @@ import java.util.concurrent.*;
  * 7ad9e661f8a035d49d049ccdb87c77ae8ecdfa35).
  *
  * @author Boris Grozev
+ * @author George Politis
  */
 public class BandwidthEstimatorImpl
     extends RTCPReportAdapter
-    implements BandwidthEstimator, RecurringRunnable
+    implements BandwidthEstimator
 {
-    /**
-     * The interval at which {@link #run()} should be called, in
-     * milliseconds.
-     */
-    private static final int PROCESS_INTERVAL_MS = 25;
-
     /**
      * The minimum value to be output by this estimator, in bits per second.
      */
@@ -65,25 +59,24 @@ public class BandwidthEstimatorImpl
     private long lastUpdateTime = -1;
 
     /**
+     *
+     */
+    private final List<BandwidthEstimator.Listener> listeners
+        = new LinkedList<>();
+
+    /**
      * bitrate_controller_impl.h
      */
     private final SendSideBandwidthEstimation sendSideBandwidthEstimation;
 
     /**
-     * The {@link MediaStream} which owns this instance.
-     */
-    private final MediaStream mediaStream;
-
-    /**
      * Initializes a new instance which is to belong to a particular
      * {@link MediaStream}.
-     * @param stream the {@link MediaStream}.
      */
     public BandwidthEstimatorImpl(MediaStream stream)
     {
-        mediaStream = stream;
         sendSideBandwidthEstimation
-            = new SendSideBandwidthEstimation(stream, START_BITRATE_BPS);
+            = new SendSideBandwidthEstimation(START_BITRATE_BPS);
         sendSideBandwidthEstimation.setMinMaxBitrate(
                 MIN_BITRATE_BPS, MAX_BITRATE_BPS);
 
@@ -96,7 +89,7 @@ public class BandwidthEstimatorImpl
      * {@inheritDoc}
      *
      * bitrate_controller_impl.cc
-     * BitrateControllerImpl::OnReceivedRtcpReceiverReport
+     * BandwidthEstimatorImpl::OnReceivedRtcpReceiverReport
      */
     @Override
     public void rtcpReportReceived(RTCPReport report)
@@ -157,54 +150,64 @@ public class BandwidthEstimatorImpl
         synchronized (sendSideBandwidthEstimation)
         {
             lastUpdateTime = System.currentTimeMillis();
-            sendSideBandwidthEstimation.updateReceiverBlock(
+            long bitrateBps = sendSideBandwidthEstimation.updateReceiverBlock(
                     fraction_lost_aggregate,
                     total_number_of_packets,
                     lastUpdateTime);
+
+            if (lastBwe != bitrateBps)
+            {
+                long oldValue = lastBwe;
+                lastBwe = bitrateBps;
+                fireBandwidthEstimationChanged(oldValue, bitrateBps);
+            }
         }
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
-    public void addListener(Listener listener)
+    public synchronized void addListener(Listener listener)
     {
-        sendSideBandwidthEstimation.addListener(listener);
+        listeners.add(listener);
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
-    public void removeListener(Listener listener)
+    public synchronized void removeListener(Listener listener)
     {
-        sendSideBandwidthEstimation.removeListener(listener);
+        listeners.remove(listener);
     }
+
+    /**
+     * Notifies registered listeners that the estimation of the available
+     * bandwidth has changed.
+     * @param oldValue the old value (in bps).
+     * @param newValue the new value (in bps).
+     */
+    private synchronized void fireBandwidthEstimationChanged(
+        long oldValue, long newValue)
+    {
+        for (BandwidthEstimator.Listener listener : listeners)
+        {
+            listener.bandwidthEstimationChanged(newValue);
+        }
+    }
+
+    private long lastBwe = -1;
 
     @Override
     public void updateReceiverEstimate(long bandwidth)
     {
-        sendSideBandwidthEstimation.updateReceiverEstimate(bandwidth);
-    }
-
-    /**
-     * {@inheritDoc}
-     */
-    @Override
-    public long getTimeUntilNextRun()
-    {
-        return
-                (lastUpdateTime < 0L)
-                        ? 0L
-                        : lastUpdateTime + PROCESS_INTERVAL_MS
-                            - System.currentTimeMillis();
-    }
-
-    /**
-     * {@inheritDoc}
-     */
-    @Override
-    public void run()
-    {
-        synchronized (sendSideBandwidthEstimation)
+        long bitrateBps = sendSideBandwidthEstimation.updateReceiverEstimate(bandwidth);
+        if (lastBwe != bitrateBps)
         {
-            lastUpdateTime = System.currentTimeMillis();
-            sendSideBandwidthEstimation.updateEstimate(lastUpdateTime);
+            long oldValue = lastBwe;
+            lastBwe = bitrateBps;
+            fireBandwidthEstimationChanged(oldValue, bitrateBps);
         }
     }
 }

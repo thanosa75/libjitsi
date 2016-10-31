@@ -276,18 +276,6 @@ public interface MediaStream
     public List<Long> getRemoteSourceIDs();
 
     /**
-     * Returns a synchronized {@code Map<Long, MediaStreamTrack>} that maps the
-     * {@code MediaStreamTrack}s of the remote peer, as they're signaled by the
-     * remote peer, by the SSRCs of their {@code RTPEncoding}s. The signaling
-     * layer manages this map.
-     *
-     * @return a synchronized {@code Map<Long, MediaStreamTrack>} that maps the
-     * {@code MediaStreamTrack}s of the remote peer, as they're signaled by the
-     * remote peer, by the SSRCs of their {@code RTPEncoding}s.
-     */
-    public Map<Long, MediaStreamTrack> getRemoteTracks();
-
-    /**
      * Gets the {@code StreamRTPManager} which is to forward RTP and RTCP
      * traffic between this and other {@code MediaStream}s.
      *
@@ -521,12 +509,17 @@ public interface MediaStream
     /**
      * Utility method that determines whether or not a packet is a key frame.
      *
-     * @param buf the buffer that holds the RTP payload.
-     * @param off the offset in the buff where the RTP payload is found.
-     * @param len then length of the RTP payload in the buffer.
+     * @param baf the buffer that holds the RTP payload.
      * @return true if the packet is a key frame, false otherwise.
      */
-    public boolean isKeyFrame(byte[] buf, int off, int len);
+    public boolean isKeyFrame(ByteArrayBuffer baf);
+
+    /**
+     *
+     * @param baf
+     * @return
+     */
+    public int getTemporalLayer(ByteArrayBuffer baf);
 
     /**
      * Gets the {@link RawPacketCache} which (optionally) caches outgoing

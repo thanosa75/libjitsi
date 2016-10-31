@@ -15,8 +15,6 @@
  */
 package org.jitsi.impl.neomedia.rtp.sendsidebandwidthestimation;
 
-import org.jitsi.service.neomedia.*;
-import org.jitsi.service.neomedia.rtp.*;
 import org.jitsi.util.*;
 
 import java.util.*;
@@ -30,7 +28,6 @@ import java.util.*;
  * @author Boris Grozev
  */
 class SendSideBandwidthEstimation
-    implements BandwidthEstimator
 {
     /**
      * send_side_bandwidth_estimation.cc
@@ -131,16 +128,9 @@ class SendSideBandwidthEstimation
      */
     private Deque<Pair<Long>> min_bitrate_history_ = new LinkedList<>();
 
-    private final List<BandwidthEstimator.Listener> listeners
-        = new LinkedList<>();
-
-    //TODO: get RTT from here
-    private final MediaStream mediaStream;
-
-    SendSideBandwidthEstimation(MediaStream stream, long startBitrate)
+    SendSideBandwidthEstimation(long startBitrate)
     {
-        mediaStream = stream;
-        setBitrate(startBitrate);
+        bitrate_ = startBitrate;
     }
 
     /**
@@ -175,7 +165,7 @@ class SendSideBandwidthEstimation
     /**
      * void SendSideBandwidthEstimation::UpdateEstimate(int64_t now_ms)
      */
-    protected synchronized void updateEstimate(long now)
+    protected synchronized long updateEstimate(long now)
     {
         long bitrate = bitrate_;
 
@@ -184,10 +174,10 @@ class SendSideBandwidthEstimation
         if (last_fraction_loss_ == 0 && isInStartPhase(now) &&
                 bwe_incoming_ > bitrate)
         {
-            setBitrate(capBitrateToThresholds(bwe_incoming_));
+            bitrate_ = capBitrateToThresholds(bwe_incoming_);
             min_bitrate_history_.clear();
             min_bitrate_history_.addLast(new Pair<>(now, bitrate));
-            return;
+            return bitrate_;
         }
         updateMinHistory(now);
         // Only start updating bitrate when receiving receiver blocks.
@@ -223,7 +213,7 @@ class SendSideBandwidthEstimation
                 // rtt.
                 if (!has_decreased_since_last_fraction_loss_ &&
                         (now - time_last_decrease_ms_) >=
-                                (kBweDecreaseIntervalMs + getRtt()))
+                                (kBweDecreaseIntervalMs /*+ getRtt()*/))
                 {
                     time_last_decrease_ms_ = now;
 
@@ -236,13 +226,15 @@ class SendSideBandwidthEstimation
                 }
             }
         }
-        setBitrate(capBitrateToThresholds(bitrate));
+
+        bitrate_ = capBitrateToThresholds(bitrate);
+        return bitrate_;
     }
 
     /**
      * void SendSideBandwidthEstimation::UpdateReceiverBlock
      */
-    synchronized void updateReceiverBlock(
+    synchronized long updateReceiverBlock(
             long fraction_lost, long number_of_packets, long now)
     {
         if (first_report_time_ms_ == -1)
@@ -261,7 +253,7 @@ class SendSideBandwidthEstimation
 
             // Don't generate a loss rate until it can be based on enough packets.
             if (expected_packets_since_last_loss_update_ < kLimitNumPackets)
-                return;
+                return bitrate_;
 
             has_decreased_since_last_fraction_loss_ = false;
             last_fraction_loss_ =
@@ -274,7 +266,7 @@ class SendSideBandwidthEstimation
         }
 
         time_last_receiver_block_ms_ = now;
-        updateEstimate(now);
+        return updateEstimate(now);
     }
 
     /**
@@ -306,10 +298,11 @@ class SendSideBandwidthEstimation
     /**
      * void SendSideBandwidthEstimation::UpdateReceiverEstimate
      */
-    public synchronized void updateReceiverEstimate(long bandwidth)
+    public synchronized long updateReceiverEstimate(long bandwidth)
     {
         bwe_incoming_ = bandwidth;
-        setBitrate(capBitrateToThresholds(bitrate_));
+        bitrate_ = capBitrateToThresholds(bitrate_);
+        return bitrate_;
     }
 
     /**
@@ -326,70 +319,6 @@ class SendSideBandwidthEstimation
         else
         {
             max_bitrate_configured_ = kDefaultMaxBitrateBps;
-        }
-    }
-
-    /**
-     * Sets the value of {@link #bitrate_}.
-     * @param newValue the value to set
-     */
-    private synchronized void setBitrate(long newValue)
-    {
-        long oldValue = bitrate_;
-        bitrate_ = newValue;
-        if (oldValue != bitrate_)
-        {
-            fireBandwidthEstimationChanged(oldValue, newValue);
-        }
-    }
-
-    /**
-     * {@inheritDoc}
-     */
-    @Override
-    public synchronized void addListener(Listener listener)
-    {
-        listeners.add(listener);
-    }
-
-    /**
-     * {@inheritDoc}
-     */
-    @Override
-    public synchronized void removeListener(Listener listener)
-    {
-        listeners.remove(listener);
-    }
-
-    /**
-     * Returns the last calculated RTT to the endpoint.
-     * @return the last calculated RTT to the endpoint.
-     */
-    private synchronized long getRtt()
-    {
-        long rtt = mediaStream.getMediaStreamStats().getRttMs();
-        if (rtt < 0 || rtt > 1000)
-        {
-            logger.warn("RTT not calculated, or has a suspiciously high value ("
-                + rtt + "). Using the default of 100ms.");
-            rtt = 100;
-        }
-
-        return rtt;
-    }
-
-    /**
-     * Notifies registered listeners that the estimation of the available
-     * bandwidth has changed.
-     * @param oldValue the old value (in bps).
-     * @param newValue the new value (in bps).
-     */
-    private synchronized void fireBandwidthEstimationChanged(
-            long oldValue, long newValue)
-    {
-        for (BandwidthEstimator.Listener listener : listeners)
-        {
-            listener.bandwidthEstimationChanged(newValue);
         }
     }
 

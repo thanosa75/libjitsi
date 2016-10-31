@@ -31,7 +31,7 @@ import org.jitsi.util.*;
  * @author George Politis
  * @author Lyubomir Marinov
  */
-public class SsrcRewritingEngine
+public class MultiStreamRewritingEngine
     extends SinglePacketTransformerAdapter
     implements TransformEngine
 {
@@ -68,11 +68,11 @@ public class SsrcRewritingEngine
     private static final int SEQNUM_HISTORY_MAX_ENTRIES = 2000;
 
     /**
-     * The <tt>Logger</tt> used by the <tt>SsrcRewritingEngine</tt> class and
-     * its instances to print debug information.
+     * The <tt>Logger</tt> used by the <tt>MultiStreamRewritingEngine</tt> class
+     * and its instances to print debug information.
      */
     private static final Logger logger
-        = Logger.getLogger(SsrcRewritingEngine.class);
+        = Logger.getLogger(MultiStreamRewritingEngine.class);
 
     /**
      * The owner of this instance.
@@ -90,7 +90,7 @@ public class SsrcRewritingEngine
      *
      * @param stream The {@code MediaStream} that owns this instance.
      */
-    public SsrcRewritingEngine(MediaStream stream)
+    public MultiStreamRewritingEngine(MediaStream stream)
     {
         super(RTPPacketPredicate.INSTANCE);
         this.stream = stream;
@@ -140,45 +140,48 @@ public class SsrcRewritingEngine
                 MediaStream receiveStream = receiveRTPManager.getMediaStream();
                 if (receiveStream != null)
                 {
-                    track = receiveStream.getRemoteTracks().get(encodingSSRC);
+                    MediaStreamTrackResolver resolver =
+                        MediaStreamExtensions.getMediaStreamTrackResolver(receiveStream);
+
+                    if (resolver != null)
+                    {
+                        track = resolver.resolveMediaStreamTrack(pkt);
+                    }
                 }
             }
 
             if (track == null)
             {
                 // Maybe signaling hasn't propagated yet.
-                if (logger.isDebugEnabled())
+                if (logger.isWarnEnabled())
                 {
-                    logger.debug("track_not_found"
+                    logger.error("err_track_not_found"
                         + ",stream_hash=" + stream.hashCode()
-                        + ",encodingSSRC=" + encodingSSRC
-                        + " seqNum=" + pkt.getSequenceNumber());
+                        + ",encoding_ssrc=" + encodingSSRC
+                        + " seqnum=" + pkt.getSequenceNumber());
                 }
 
                 return pkt;
             }
 
-            RTPEncoding encoding = track.getEncodingBySSRC(encodingSSRC);
-            if (encoding == null
-                || !encoding.getMediaStreamTrack().hasMultipleEncodings())
+            if (!track.isMultiStream())
             {
                 // Maybe signaling hasn't propagated yet, or maybe this track
                 // only has a single RTPEncoding.
 
                 // Maybe signaling hasn't propagated yet.
-                if (encoding == null && logger.isDebugEnabled())
+                if (logger.isWarnEnabled())
                 {
-                    logger.debug("encoding_not_found"
+                    logger.error("err_encoding_not_found"
                         + ",stream_hash=" + stream.hashCode()
-                        + ",encodingSSRC=" + encodingSSRC
-                        + " seqNum=" + pkt.getSequenceNumber());
+                        + ",encoding_ssrc=" + encodingSSRC
+                        + " seqnum=" + pkt.getSequenceNumber());
                 }
 
                 return pkt;
             }
 
-            long trackSSRC = track.getEncodingByOrder(RTPEncoding.BASE_ORDER)
-                .getPrimarySSRC();
+            long trackSSRC = track.getRTPEncodings()[0].getPrimarySSRC();
 
             rewriter = rewritersBySSRC.get(trackSSRC);
             if (rewriter == null)
@@ -188,9 +191,9 @@ public class SsrcRewritingEngine
                 {
                     logger.debug("new_rewriter"
                         + ",stream_hash=" + stream.hashCode()
-                        + ",encodingSSRC=" + encodingSSRC
-                        + ",trackSSRC=" + trackSSRC
-                        + " seqNum=" + pkt.getSequenceNumber());
+                        + ",encoding_ssrc=" + encodingSSRC
+                        + ",track_ssrc=" + trackSSRC
+                        + " seqnum=" + pkt.getSequenceNumber());
                 }
 
                 rewriter = new Rewriter(trackSSRC);
@@ -272,10 +275,10 @@ public class SsrcRewritingEngine
                     {
                         logger.debug("cur_interval"
                             + ",stream_hash=" + stream.hashCode()
-                            + ",srcSSRC=" + ssrcState.encodingSSRC
-                            + ",dstSSRC=" + trackSSRC
-                            + " srcSeqnum=" + srcExtSeqNum
-                            + ",dstSeqnum=" + dstExtSeqNum);
+                            + ",src_ssrc=" + ssrcState.encodingSSRC
+                            + ",dst_ssrc=" + trackSSRC
+                            + " src_seqnum=" + srcExtSeqNum
+                            + ",dst_seqnum=" + dstExtSeqNum);
                     }
                     return dstExtSeqNum;
                 }
@@ -299,14 +302,14 @@ public class SsrcRewritingEngine
                     srcExtSeqNum, false /* canExtend */);
                 if (dstExtSeqNum == -1)
                 {
-                    logger.warn("packet_out_of_bounds"
+                    logger.error("err_packet_out_of_bounds"
                         + ",stream_hash=" + stream.hashCode()
-                        + ",srcSSRC=" + ssrcState.encodingSSRC
-                        + ",dstSSRC=" + trackSSRC
-                        + " srcSeqnum=" + srcExtSeqNum
-                        + ",dstSeqnum=" + dstExtSeqNum
-                        + ",min=" + ceiling.min
-                        + ",max=" + ceiling.max);
+                        + ",src_ssrc=" + ssrcState.encodingSSRC
+                        + ",dst_ssrc=" + trackSSRC
+                        + " src_seqnum=" + srcExtSeqNum
+                        + ",dst_seqnum=" + dstExtSeqNum
+                        + ",ceiling_min=" + ceiling.min
+                        + ",ceiling_max=" + ceiling.max);
                 }
 
                 return dstExtSeqNum;
@@ -372,10 +375,10 @@ public class SsrcRewritingEngine
             {
                 logger.debug("new_interval"
                     + ",stream_hash=" + stream.hashCode()
-                    + ",srcSSRC=" + ssrcState.encodingSSRC
-                    + ",dstSSRC=" + trackSSRC
-                    + " srcSeqnum=" + srcExtSeqNum
-                    + ",dstSeqnum=" + dstExtSeqNum
+                    + ",src_ssrc=" + ssrcState.encodingSSRC
+                    + ",dst_ssrc=" + trackSSRC
+                    + " src_seqnum=" + srcExtSeqNum
+                    + ",dst_seqnum=" + dstExtSeqNum
                     + ",delta=" + delta);
             }
 
@@ -397,14 +400,25 @@ public class SsrcRewritingEngine
             TimestampEntry oldTsEntry = ssrcState.tsHistory.get(srcTs);
             if (oldTsEntry != null && oldTsEntry.isFresh(nowMs))
             {
-                if (logger.isDebugEnabled())
+                if (ssrcState.encodingSSRC != trackSSRC && logger.isDebugEnabled())
                 {
+                    // We should have a clock at this point. If we don't then
+                    // it's a bug.
+                    RemoteClock[] clocks = stream.getStreamRTPManager()
+                        .findRemoteClocks(ssrcState.encodingSSRC, trackSSRC);
+
+                    Timestamp srcTimestamp
+                        = clocks[0].rtpTimestamp2remoteSystemTimeMs(srcTs),
+                        dstTimestamp = clocks[1].rtpTimestamp2remoteSystemTimeMs(oldTsEntry.dstTs);
+
                     logger.debug("rewrite_old_frame_success"
                         + ",stream_hash=" + stream.hashCode()
-                        + ",srcSSRC=" + ssrcState.encodingSSRC
-                        + ",dstSSRC=" + trackSSRC
-                        + " srcTs=" + srcTs
-                        + ",dstTs=" + oldTsEntry.dstTs);
+                        + ",src_ssrc=" + ssrcState.encodingSSRC
+                        + ",dst_ssrc=" + trackSSRC
+                        + " src_ts=" + srcTimestamp.getRtpTimestampAsLong()
+                        + ",src_time=" + new Date(srcTimestamp.getSystemTimeMs())
+                        + ",dst_ts=" + dstTimestamp.getRtpTimestampAsLong()
+                        + ",dst_time=" + new Date(dstTimestamp.getSystemTimeMs()));
                 }
 
                 return oldTsEntry.dstTs;
@@ -424,10 +438,10 @@ public class SsrcRewritingEngine
                 // timestamp rewriting.
                 if (clocks.length != 2 || clocks[0] == null || clocks[1] == null)
                 {
-                    logger.warn("clock_not_found"
+                    logger.error("err_clock_not_found"
                         + ",stream_hash=" + stream.hashCode()
-                        + ",srcSSRC=" + ssrcState.encodingSSRC
-                        + ",dstSSRC=" + trackSSRC);
+                        + ",src_ssrc=" + ssrcState.encodingSSRC
+                        + ",dst_ssrc=" + trackSSRC);
                     return -1;
                 }
 
@@ -445,10 +459,10 @@ public class SsrcRewritingEngine
 
                 if (srcTimestamp == null)
                 {
-                    logger.warn("rtp_to_system_failed"
+                    logger.error("err_rtp_to_system_failed"
                         + ",stream_hash=" + stream.hashCode()
-                        + ",srcSSRC=" + ssrcState.encodingSSRC
-                        + ",dstSSRC=" + trackSSRC);
+                        + ",src_ssrc=" + ssrcState.encodingSSRC
+                        + ",dst_ssrc=" + trackSSRC);
                     return -1;
                 }
 
@@ -459,10 +473,10 @@ public class SsrcRewritingEngine
 
                 if (dstTimestamp == null)
                 {
-                    logger.warn("system_to_rtp_failed"
+                    logger.error("err_system_to_rtp_failed"
                         + ",stream_hash=" + stream.hashCode()
-                        + ",srcSSRC=" + ssrcState.encodingSSRC
-                        + ",dstSSRC=" + trackSSRC);
+                        + ",src_ssrc=" + ssrcState.encodingSSRC
+                        + ",dst_ssrc=" + trackSSRC);
                     return -1;
                 }
 
@@ -497,12 +511,12 @@ public class SsrcRewritingEngine
                 {
                     if (logger.isDebugEnabled())
                     {
-                        logger.warn("downlifting"
+                        logger.warn("warn_downlifting"
                             + ",stream_hash=" + stream.hashCode()
-                            + ",srcSSRC=" + ssrcState.encodingSSRC
-                            + ",dstSSRC=" + trackSSRC
-                            + " ts=" + dstTs
-                            + ",newTs=" + (ssrcState.maxTsEntry.dstTs - 1));
+                            + ",src_ssrc=" + ssrcState.encodingSSRC
+                            + ",dst_ssrc=" + trackSSRC
+                            + " dst_ts=" + dstTs
+                            + ",downlifted_ts=" + (ssrcState.maxTsEntry.dstTs - 1));
                     }
 
                     // It seems that rewriting using the wallclocks resulted in
@@ -514,14 +528,25 @@ public class SsrcRewritingEngine
                 ssrcState.tsHistory.put(
                     srcTs, new TimestampEntry(nowMs, srcTs, dstTs));
 
-                if (logger.isDebugEnabled())
+                if (ssrcState.encodingSSRC != trackSSRC && logger.isDebugEnabled())
                 {
+                    // We should have a clock at this point. If we don't then
+                    // it's a bug.
+                    RemoteClock[] clocks = stream.getStreamRTPManager()
+                        .findRemoteClocks(ssrcState.encodingSSRC, trackSSRC);
+
+                    Timestamp srcTimestamp
+                        = clocks[0].rtpTimestamp2remoteSystemTimeMs(srcTs),
+                        dstTimestamp = clocks[1].rtpTimestamp2remoteSystemTimeMs(dstTs);
+
                     logger.debug("rewrite_old_frame_success"
                         + ",stream_hash=" + stream.hashCode()
-                        + ",srcSSRC=" + ssrcState.encodingSSRC
-                        + ",dstSSRC=" + trackSSRC
-                        + " srcTs=" + srcTs
-                        + ",dstTs=" + dstTs);
+                        + ",src_ssrc=" + ssrcState.encodingSSRC
+                        + ",dst_ssrc=" + trackSSRC
+                        + ",src_ts=" + srcTimestamp.getRtpTimestampAsLong()
+                        + ",src_time=" + new Date(srcTimestamp.getSystemTimeMs())
+                        + ",dst_ts=" + dstTimestamp.getRtpTimestampAsLong()
+                        + ",dst_time=" + new Date(dstTimestamp.getSystemTimeMs()));
                 }
 
                 return dstTs;
@@ -562,12 +587,12 @@ public class SsrcRewritingEngine
             {
                 if (logger.isDebugEnabled())
                 {
-                    logger.debug("uplifting"
+                    logger.warn("warn_uplifting"
                         + ",stream_hash=" + stream.hashCode()
-                        + ",srcSSRC=" + ssrcState.encodingSSRC
-                        + ",dstSSRC=" + trackSSRC
-                        + " ts=" + dstTs
-                        + ",newTs=" + minTimestamp);
+                        + ",src_ssrc=" + ssrcState.encodingSSRC
+                        + ",dst_ssrc=" + trackSSRC
+                        + " dst_ts=" + dstTs
+                        + ",uplifted_ts=" + minTimestamp);
                 }
 
                 // The calculated dstTs is smaller than the required minimum
@@ -579,12 +604,27 @@ public class SsrcRewritingEngine
             ssrcState.tsHistory.put(srcTs, maxTsEntry);
             ssrcState.maxTsEntry = maxTsEntry;
 
-            logger.debug("rewrite_new_frame_success"
-                + ",stream_hash=" + stream.hashCode()
-                + ",srcSSRC=" + ssrcState.encodingSSRC
-                + ",dstSSRC=" + trackSSRC
-                + " srcTs=" + srcTs
-                + ",dstTs=" + dstTs);
+            if (ssrcState.encodingSSRC != trackSSRC && logger.isDebugEnabled())
+            {
+                // We should have a clock at this point. If we don't then
+                // it's a bug.
+                RemoteClock[] clocks = stream.getStreamRTPManager()
+                    .findRemoteClocks(ssrcState.encodingSSRC, trackSSRC);
+
+                Timestamp srcTimestamp
+                    = clocks[0].rtpTimestamp2remoteSystemTimeMs(srcTs),
+                    dstTimestamp = clocks[1].rtpTimestamp2remoteSystemTimeMs(dstTs);
+
+                logger.debug("rewrite_new_frame_success"
+                    + ",stream_hash=" + stream.hashCode()
+                    + ",src_ssrc=" + ssrcState.encodingSSRC
+                    + ",dst_ssrc=" + trackSSRC
+                    + ",src_ts=" + srcTimestamp.getRtpTimestampAsLong()
+                    + ",src_time=" + new Date(srcTimestamp.getSystemTimeMs())
+                    + ",dst_time=" + dstTimestamp.getRtpTimestampAsLong()
+                    + ",dst_time=" + new Date(dstTimestamp.getSystemTimeMs()));
+
+            }
             return dstTs;
         }
 

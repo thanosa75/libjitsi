@@ -16,6 +16,7 @@
 package org.jitsi.impl.neomedia.transform;
 
 import org.jitsi.impl.neomedia.*;
+import org.jitsi.service.neomedia.*;
 import org.jitsi.util.*;
 import org.jitsi.util.function.*;
 
@@ -65,7 +66,7 @@ public abstract class SinglePacketTransformer
      * transform RTP packets should not transform RTCP packets, if, by mistake,
      * they happen to be passed RTCP packets.
      */
-    private final Predicate<RawPacket> packetPredicate;
+    private final Predicate<ByteArrayBuffer> packetPredicate;
 
     /**
      * Ctor.
@@ -88,7 +89,7 @@ public abstract class SinglePacketTransformer
      * @param packetPredicate the <tt>PacketPredicate</tt> to use to match
      * packets to (reverse) transform.
      */
-    public SinglePacketTransformer(Predicate<RawPacket> packetPredicate)
+    public SinglePacketTransformer(Predicate<ByteArrayBuffer> packetPredicate)
     {
         this.packetPredicate = packetPredicate;
     }

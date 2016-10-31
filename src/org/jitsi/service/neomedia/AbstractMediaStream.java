@@ -253,15 +253,6 @@ public abstract class AbstractMediaStream
      * {@inheritDoc}
      */
     @Override
-    public Map<Long, MediaStreamTrack> getRemoteTracks()
-    {
-        return new HashMap<>();
-    }
-
-    /**
-     * {@inheritDoc}
-     */
-    @Override
     public RtxTransformer getRtxTransformer()
     {
         return null;

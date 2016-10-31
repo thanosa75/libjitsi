@@ -16,6 +16,7 @@
 package org.jitsi.impl.neomedia.transform;
 
 import org.jitsi.impl.neomedia.*;
+import org.jitsi.service.neomedia.*;
 import org.jitsi.util.function.*;
 
 /**
@@ -39,7 +40,8 @@ public class SinglePacketTransformerAdapter
      * @param packetPredicate the <tt>PacketPredicate</tt> to use to match
      * packets to (reverse) transform.
      */
-    public SinglePacketTransformerAdapter(Predicate<RawPacket> packetPredicate)
+    public SinglePacketTransformerAdapter(
+        Predicate<ByteArrayBuffer> packetPredicate)
     {
         super(packetPredicate);
     }

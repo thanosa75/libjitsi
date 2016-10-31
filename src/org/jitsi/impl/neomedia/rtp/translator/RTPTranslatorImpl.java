@@ -1233,12 +1233,8 @@ public class RTPTranslatorImpl
      * <tt>source</tt> will be written into a <tt>destination</tt>.
      *
      * @param source the source of <tt>buffer</tt>
-     * @param buffer the bytes from <tt>source</tt> which are to be written into
+     * @param baf the bytes from <tt>source</tt> which are to be written into
      * <tt>destination</tt>
-     * @param offset the offset in <tt>buffer</tt> at which the bytes to be
-     * written begin
-     * @param length the number of bytes in <tt>buffer</tt> beginning at
-     * <tt>offset</tt> which represent the bytes to be written
      * @param destination the destination into which <tt>buffer</tt> is to be
      * written
      * @param data <tt>true</tt> for data/RTP or <tt>false</tt> for control/RTCP
@@ -1247,7 +1243,7 @@ public class RTPTranslatorImpl
      */
     boolean willWrite(
             StreamRTPManagerDesc source,
-            byte[] buffer, int offset, int length,
+            ByteArrayBuffer baf,
             StreamRTPManagerDesc destination,
             boolean data)
     {
@@ -1257,7 +1253,7 @@ public class RTPTranslatorImpl
                 : source.streamRTPManager.getMediaStream();
         MediaStream dst = destination.streamRTPManager.getMediaStream();
 
-        return willWrite(src, buffer, offset, length, dst, data);
+        return willWrite(src, baf, dst, data);
     }
 
     /**

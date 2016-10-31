@@ -857,7 +857,7 @@ public class BasicRTCPTermination
         {
             int ssrc = rtpStatsEntry.getSsrc();
             RemoteClock remoteClock = stream.getStreamRTPManager()
-                .findRemoteClock(ssrc & 0xffffffffl);
+                .findRemoteClocks(ssrc & 0xffffffffl)[0];
 
             if (remoteClock == null)
             {
@@ -1024,20 +1024,20 @@ public class BasicRTCPTermination
      * Handles an incoming RTCP REMB packet from a receiver.
      * @param pkt
      */
-    private void rembReceived(RawPacket pkt)
+    private void rembReceived(ByteArrayBuffer pkt)
     {
-        long receiverEstimate = RTCPREMBPacket.getBitrate(pkt);
-        ((VideoMediaStream) stream).getOrCreateBandwidthEstimator()
+        long receiverEstimate = RawPacket.REMBPacketUtils.getBitrate(pkt);
+        ((VideoMediaStream) stream).getBandwidthEstimator()
             .updateReceiverEstimate(receiverEstimate);
     }
 
     /**
      * Handles an incoming RTCP NACK packet from a receiver.
      */
-    private void nackReceived(RawPacket pktNack)
+    private void nackReceived(ByteArrayBuffer pktNack)
     {
         long ssrc = NACKPacket.getSourceSSRC(pktNack);
-        Set<Integer> lostPackets = NACKPacket.getLostPackets(pktNack);
+        Set<Integer> lostPackets = RawPacket.NACKPacketUtils.getLostPackets(pktNack);
 
         if (logger.isDebugEnabled())
         {
@@ -1056,7 +1056,7 @@ public class BasicRTCPTermination
         {
             // XXX The retransmission of packets MUST take into account SSRC
             // rewriting. Which it may do by injecting retransmitted packets
-            // AFTER the SsrcRewritingEngine. Since the retransmitted packets
+            // AFTER the MultiStreamRewritingEngine. Since the retransmitted packets
             // have been cached by cache and cache is a TransformEngine, the
             // injection may as well happen after cache.
             TransformEngine after
@@ -1370,9 +1370,9 @@ public class BasicRTCPTermination
 
             while (it.hasNext())
             {
-                RawPacket next = it.next();
-                int rc = RTCPHeaderUtils.getReportCount(next);
-                int pt = RTCPHeaderUtils.getPacketType(next);
+                ByteArrayBuffer next = it.next();
+                int rc = RawPacket.RTCPHeaderUtils.getReportCount(next);
+                int pt = RawPacket.RTCPHeaderUtils.getPacketType(next);
                 if (pt == RTCPFBPacket.RTPFB && rc == NACKPacket.FMT)
                 {
                     if (!disableNackTermination)
