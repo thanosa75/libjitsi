@@ -23,10 +23,20 @@ package org.jitsi.service.neomedia;
 public interface MediaStreamTrack<T extends RTPEncoding>
 {
     /**
+     *
+     * @return
+     */
+    String getMediaStreamTrackId();
+
+    /**
      * Returns an ordered array
      * @return
      */
     T[] getRTPEncodings();
 
+    /**
+     *
+     * @return
+     */
     boolean isMultiStream();
 }

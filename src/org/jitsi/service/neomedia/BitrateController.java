@@ -19,13 +19,13 @@ package org.jitsi.service.neomedia;
  * @author George Politis
  */
 public interface BitrateController
+    extends AutoCloseable
 {
     /**
      * Gets the minimum bitrate required in order to stream without scaling
      * down or suspending streams.
      *
-     * @param nowMs
      * @return
      */
-    long getMinimumBitrate(long nowMs);
+    long getMinimumBitrate();
 }
